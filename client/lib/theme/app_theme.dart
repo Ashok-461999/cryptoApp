@@ -15,6 +15,12 @@ class AppColors {
   static const warn = Color(0xFFFFB74D);
   static const gold = Color(0xFFFFD54F);
 
+  static const gradientHighPriority = LinearGradient(
+    colors: [Color(0xFFFFD54F), Color(0xFF00E676)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   static const gradientPrimary = LinearGradient(
     colors: [Color(0xFF00D4AA), Color(0xFF4DA3FF)],
     begin: Alignment.topLeft,

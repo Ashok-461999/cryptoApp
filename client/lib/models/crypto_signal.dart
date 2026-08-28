@@ -48,6 +48,9 @@ class CryptoSignal {
   final double riskPerTradeInr;
   final bool notify;
   final String signalGrade;
+  final String priorityTier;
+  final String priorityLabel;
+  final String rrLabel;
   final String chartTimeframe;
   final String entryTimeframe;
   final bool userTaken;
@@ -102,6 +105,9 @@ class CryptoSignal {
     this.riskPerTradeInr = 100,
     this.notify = false,
     this.signalGrade = 'B',
+    this.priorityTier = 'NORMAL',
+    this.priorityLabel = '',
+    this.rrLabel = '',
     this.chartTimeframe = '5m',
     this.entryTimeframe = '1m',
     this.userTaken = false,
@@ -160,6 +166,9 @@ class CryptoSignal {
       riskPerTradeInr: d(j['risk_per_trade_inr'] ?? 100),
       notify: j['notify'] == true,
       signalGrade: j['signal_grade'] ?? 'B',
+      priorityTier: j['priority_tier'] ?? 'NORMAL',
+      priorityLabel: j['priority_label'] ?? '',
+      rrLabel: j['rr_label'] ?? '',
       chartTimeframe: j['chart_timeframe'] ?? '5m',
       entryTimeframe: j['entry_timeframe'] ?? '1m',
       userTaken: j['user_taken'] == true,
@@ -171,6 +180,15 @@ class CryptoSignal {
   }
 
   bool get isTaken => userTaken;
+
+  bool get isHighPriority => priorityTier == 'HIGH';
+
+  String get displayPriorityLabel {
+    if (priorityLabel.isNotEmpty) return priorityLabel;
+    if (riskReward >= 1.9) return 'A+ 1:2';
+    if (notify || confidence >= 82) return 'A+ 1:1';
+    return '';
+  }
 
   double get effectivePositionInr =>
       positionInr > 0 ? positionInr : lev.positionInr(marginInr: marginInr, leverage: leverage);

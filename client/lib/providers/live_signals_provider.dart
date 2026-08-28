@@ -167,7 +167,7 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
         .toList();
 
     for (final sig in list) {
-      final isBest = sig.notify || sig.signalGrade == 'A+' || sig.confidence >= 82;
+      final isBest = sig.isHighPriority || sig.notify || sig.signalGrade == 'A+';
       if (!isBest) continue;
       final key = '${sig.symbol}:${sig.setup}:${sig.tradeId ?? sig.timestamp}';
       if (_notifiedKeys.contains(key)) continue;

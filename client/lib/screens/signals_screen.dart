@@ -60,7 +60,13 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
   Widget build(BuildContext context) {
     final live = ref.watch(liveSignalsProvider);
     final markets = ref.watch(marketsProvider);
-    final filtered = _applyFilter(live.signals);
+    final filtered = List<CryptoSignal>.from(_applyFilter(live.signals))
+      ..sort((a, b) {
+        final ah = a.isHighPriority ? 0 : 1;
+        final bh = b.isHighPriority ? 0 : 1;
+        if (ah != bh) return ah.compareTo(bh);
+        return b.confidence.compareTo(a.confidence);
+      });
 
     return RefreshIndicator(
       color: AppColors.accent,
@@ -287,6 +293,11 @@ class _DailyGoalBanner extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
+            '40 A+ signals/day · max 70 · 1:2 R:R',
+            style: const TextStyle(fontSize: 12, color: AppColors.gold, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
             'Signals today: $takeCount · cap: $takeCap · strict strategy engine',
             style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
@@ -402,14 +413,19 @@ class _CryptoSignalCardState extends ConsumerState<_CryptoSignalCard> {
     final refColor = refPnl >= 0 ? AppColors.profit : AppColors.loss;
     final refSign = refPnl >= 0 ? '+' : '';
 
-    return InkWell(
-      onTap: () => openSignalChart(context, signal),
-      borderRadius: BorderRadius.circular(14),
+    final isHigh = signal.isHighPriority;
+    final cardOpacity = isHigh ? 1.0 : 0.72;
+
+    Widget card = Opacity(
+      opacity: cardOpacity,
       child: Container(
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: atSl ? AppColors.loss : (signal.spreadWarning ? AppColors.warn : AppColors.border), width: atSl ? 2 : 1),
+        border: Border.all(
+          color: atSl ? AppColors.loss : (isHigh ? Colors.transparent : (signal.spreadWarning ? AppColors.warn : AppColors.border)),
+          width: atSl ? 2 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -439,7 +455,20 @@ class _CryptoSignalCardState extends ConsumerState<_CryptoSignalCard> {
                         child: Text(signal.topStrategyBadge, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.profit)),
                       ),
                     ],
-                    if (signal.notify || signal.confidence >= 82) ...[
+                    if (isHigh && signal.displayPriorityLabel.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.gradientHighPriority,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          signal.displayPriorityLabel,
+                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.bg),
+                        ),
+                      ),
+                    ] else if (signal.notify || signal.confidence >= 82) ...[
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
@@ -596,6 +625,30 @@ class _CryptoSignalCardState extends ConsumerState<_CryptoSignalCard> {
         ],
       ),
     ),
+    );
+
+    if (isHigh && !atSl) {
+      card = Container(
+        decoration: BoxDecoration(
+          gradient: AppColors.gradientHighPriority,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.gold.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(2),
+        child: card,
+      );
+    }
+
+    return InkWell(
+      onTap: () => openSignalChart(context, signal),
+      borderRadius: BorderRadius.circular(14),
+      child: card,
     );
   }
 }
