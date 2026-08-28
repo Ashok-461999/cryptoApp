@@ -186,7 +186,7 @@ class CryptoScanner:
         candidates.sort(key=self._sort_key)
         quality = [
             c for c in candidates
-            if c.get("confidence", 0) >= settings.live_min_confidence
+            if c.get("confidence", 0) > settings.live_min_confidence
         ]
 
         remaining_total = (
@@ -421,7 +421,7 @@ class CryptoScanner:
 
             confidence = decision["take_confidence"]
             min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
-            if confidence < min_conf:
+            if confidence <= min_conf:
                 continue
             notify = confidence >= settings.notify_min_confidence or (
                 decision.get("strategy_tier") == "TOP" and confidence >= 78 and plan.risk_reward >= settings.min_rr_for_take

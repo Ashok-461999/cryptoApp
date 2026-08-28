@@ -95,8 +95,10 @@ def compute_take_confidence(
         score += 15
     elif rr >= min_rr:
         score += 10
+    elif rr >= settings.normal_min_rr:
+        score += 4
     else:
-        score -= 25
+        score -= 12
 
     setup_bonus = {
         "order_flow": 18,
@@ -122,15 +124,18 @@ def compute_take_confidence(
         score += 6
 
     if result.fired and setup_allowed_in_regime(setup_name, regime.regime):
-        score += 4
+        score += 8
 
     if setup_name in TREND_FOLLOW_SETUPS and result.direction:
         if _direction_matches_trend(result.direction, regime.trend_direction):
             score += 8
         else:
-            score -= 15
+            score -= 10
 
-    return int(max(5, min(95, score)))
+    final = int(max(5, min(95, score)))
+    if result.fired and final <= 50:
+        final = 51
+    return final
 
 
 def evaluate_trade_decision(
@@ -192,7 +197,7 @@ def evaluate_trade_decision(
             }
 
     if regime.regime == Regime.VOLATILE and category == "alt":
-        if confidence < settings.normal_min_confidence:
+        if confidence <= settings.normal_min_confidence:
             return {
                 "trade_decision": "NO_TRADE",
                 "can_take": False,
@@ -222,7 +227,7 @@ def evaluate_trade_decision(
         }
 
     min_conf = settings.mover_min_confidence if category in ("meme", "mover") else settings.normal_min_confidence
-    if confidence < min_conf:
+    if confidence <= min_conf:
         return {
             "trade_decision": "NO_TRADE",
             "can_take": False,

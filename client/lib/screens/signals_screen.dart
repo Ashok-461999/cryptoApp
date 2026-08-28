@@ -301,7 +301,7 @@ class _DailyGoalBanner extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Signals today: $takeCount · cap: $takeCap · all strategy types enabled',
+            'Signals today: $takeCount · cap: $takeCap · confidence > 50% shown',
             style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
           if (lastClosed != null) ...[
