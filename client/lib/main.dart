@@ -50,17 +50,11 @@ class _HomeShellState extends ConsumerState<_HomeShell> {
   }
 
   Future<void> _bootstrap() async {
-    final needsSetup = await ServerConfig.needsSetup();
-    if (needsSetup) {
-      final url = await ServerConfig.ensureConfigured();
-      ref.invalidate(serverUrlProvider);
-      ref.invalidate(apiServiceProvider);
-      ref.read(liveSignalsProvider.notifier).connect(url);
-      if (mounted) setState(() => _index = 5);
-    } else {
-      final url = await ServerConfig.getBaseUrl();
-      ref.read(liveSignalsProvider.notifier).connect(url);
-    }
+    await ServerConfig.ensureConfigured();
+    final url = await ServerConfig.getBaseUrl();
+    ref.invalidate(serverUrlProvider);
+    ref.invalidate(apiServiceProvider);
+    ref.read(liveSignalsProvider.notifier).connect(url);
   }
 
   @override

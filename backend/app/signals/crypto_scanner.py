@@ -376,13 +376,17 @@ class CryptoScanner:
             min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.scalp_min_confidence
             if confidence < min_conf:
                 continue
-            notify = confidence >= settings.notify_min_confidence
+            notify = confidence >= settings.notify_min_confidence or (
+                decision.get("strategy_tier") == "TOP" and confidence >= 80 and plan.risk_reward >= 2.0
+            )
+            rr_label = "1:2" if plan.risk_reward >= 1.9 else ("1:1" if plan.risk_reward >= 0.9 else f"1:{plan.risk_reward:.1f}")
 
             signal = plan.to_dict()
             signal.update({
                 "setup": setup_name,
                 "confidence": confidence,
                 "notify": notify,
+                "rr_label": rr_label,
                 "signal_grade": "A+" if notify else "A",
                 "strategy_tier": decision.get("strategy_tier", "TOP" if setup_name in TOP_SETUPS else "STD"),
                 "decision_reason": decision["decision_reason"],

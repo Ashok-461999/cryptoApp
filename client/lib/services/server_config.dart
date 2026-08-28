@@ -4,16 +4,16 @@ import '../config.dart';
 
 const _keyServerUrl = 'server_base_url';
 
-/// Phone on WiFi — change in Settings if your ipconfig shows different.
-const String suggestedPcUrl = 'http://192.168.0.2:8000';
+/// Live AWS EC2 backend — auto-connected (no manual URL in Settings).
+const String productionApiUrl = 'http://13.201.83.70';
 
-/// Android emulator reaches PC via 10.0.2.2 (host machine).
+/// Android emulator reaches PC via 10.0.2.2 (local dev only).
 const String emulatorPcUrl = 'http://10.0.2.2:8000';
 
-String get _setupUrl {
+String get _defaultUrl {
   const devHost = String.fromEnvironment('DEV_HOST_URL', defaultValue: '');
   if (devHost.isNotEmpty) return devHost;
-  return suggestedPcUrl;
+  return productionApiUrl;
 }
 
 class ServerConfig {
@@ -22,28 +22,24 @@ class ServerConfig {
   static Future<String> getBaseUrl() async {
     if (_cached != null) return _cached!;
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_keyServerUrl) ?? AppConfig.apiBaseUrl;
-    _cached = _isLocalhost(saved) ? _setupUrl : saved;
+    final saved = prefs.getString(_keyServerUrl);
+    if (saved == null || saved.isEmpty || _isLocalhost(saved)) {
+      _cached = _defaultUrl;
+      return _cached!;
+    }
+    _cached = saved;
     return _cached!;
   }
 
   static bool _isLocalhost(String url) =>
       url.contains('127.0.0.1') || url.contains('localhost');
 
-  static Future<bool> needsSetup() async {
-    final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_keyServerUrl);
-    if (saved == null || saved.isEmpty) return true;
-    return saved.contains('127.0.0.1') || saved.contains('localhost');
-  }
+  static Future<bool> needsSetup() async => false;
 
-  /// First launch: save PC URL so phone does not use 127.0.0.1 (phone itself).
   static Future<String> ensureConfigured() async {
-    if (await needsSetup()) {
-      await setBaseUrl(_setupUrl);
-      return _setupUrl;
-    }
-    return getBaseUrl();
+    final url = _defaultUrl;
+    await setBaseUrl(url);
+    return url;
   }
 
   static Future<void> setBaseUrl(String url) async {

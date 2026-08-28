@@ -153,15 +153,13 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Cannot reach PC backend', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.loss, fontSize: 13)),
+                      const Text('Cannot reach AWS server', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.loss, fontSize: 13)),
                       const SizedBox(height: 6),
                       Text(live.error!, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
                       const SizedBox(height: 6),
                       const Text(
-                        '1. PC & phone on same WiFi\n'
-                        '2. Backend running on PC\n'
-                        '3. Run ALLOW_FIREWALL.bat as Admin on PC\n'
-                        '4. Settings → http://192.168.0.2:8000 → Test',
+                        'Server: 13.201.83.70 · Auto-reconnecting every 5s\n'
+                        'Check your internet connection.',
                         style: TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.4),
                       ),
                     ],
@@ -441,12 +439,15 @@ class _CryptoSignalCardState extends ConsumerState<_CryptoSignalCard> {
                         child: Text(signal.topStrategyBadge, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.profit)),
                       ),
                     ],
-                    if (signal.notify) ...[
+                    if (signal.notify || signal.confidence >= 82) ...[
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(6)),
-                        child: const Text('A+ NOTIFY', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.bg)),
+                        child: Text(
+                          signal.riskReward >= 1.9 ? 'A+ 1:2' : 'A+ 1:1',
+                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.bg),
+                        ),
                       ),
                     ],
                   ],

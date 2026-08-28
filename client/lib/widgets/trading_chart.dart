@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Binance-style candlestick chart with S/R, strategy line, expected move zone.
-class TradingChart extends StatelessWidget {
+/// Binance-style candlestick chart with S/R, strategy line, expected move zone + pinch/zoom.
+class TradingChart extends StatefulWidget {
   final List<Map<String, dynamic>> candles;
   final double? entry;
   final double? stopLoss;
@@ -36,58 +36,120 @@ class TradingChart extends StatelessWidget {
   });
 
   @override
+  State<TradingChart> createState() => _TradingChartState();
+}
+
+class _TradingChartState extends State<TradingChart> {
+  double _zoom = 1.0;
+  static const _minZoom = 0.6;
+  static const _maxZoom = 4.0;
+
+  void _zoomIn() => setState(() => _zoom = (_zoom * 1.25).clamp(_minZoom, _maxZoom));
+  void _zoomOut() => setState(() => _zoom = (_zoom / 1.25).clamp(_minZoom, _maxZoom));
+  void _resetZoom() => setState(() => _zoom = 1.0);
+
+  List<Map<String, dynamic>> get _visibleCandles {
+    if (widget.candles.isEmpty) return widget.candles;
+    final count = (widget.candles.length / _zoom).round().clamp(15, widget.candles.length);
+    return widget.candles.sublist(widget.candles.length - count);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (loading) {
-      return const SizedBox(height: 280, child: Center(child: CircularProgressIndicator(color: AppColors.accent)));
+    if (widget.loading) {
+      return const SizedBox(height: 320, child: Center(child: CircularProgressIndicator(color: AppColors.accent)));
     }
-    if (candles.length < 3) {
+    if (widget.candles.length < 3) {
       return const SizedBox(
-        height: 280,
+        height: 320,
         child: Center(child: Text('No chart data', style: TextStyle(color: AppColors.textMuted))),
       );
     }
+
+    final visible = _visibleCandles;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 4,
+          child: Row(
             children: [
-              Text('Chart · $interval', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accent)),
-              if (support != null) const _LegendDot(color: AppColors.profit, label: 'Support'),
-              if (resistance != null) const _LegendDot(color: AppColors.loss, label: 'Resistance'),
-              if (strategyLine != null) const _LegendDot(color: AppColors.accentBlue, label: 'Strategy'),
-              if (entry != null) const _LegendDot(color: AppColors.accent, label: 'Entry'),
-              if (stopLoss != null) const _LegendDot(color: AppColors.loss, label: 'SL'),
-              if (target != null) const _LegendDot(color: AppColors.profit, label: 'T1'),
-              if (expectedMoveLow != null && expectedMoveHigh != null)
-                const _LegendDot(color: AppColors.gold, label: 'Expected move'),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    Text('Chart · ${widget.interval}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accent)),
+                    if (widget.support != null) const _LegendDot(color: AppColors.profit, label: 'Support'),
+                    if (widget.resistance != null) const _LegendDot(color: AppColors.loss, label: 'Resistance'),
+                    if (widget.entry != null) const _LegendDot(color: AppColors.accent, label: 'Entry'),
+                    if (widget.stopLoss != null) const _LegendDot(color: AppColors.loss, label: 'SL'),
+                    if (widget.target != null) const _LegendDot(color: AppColors.profit, label: 'T1'),
+                  ],
+                ),
+              ),
+              _ZoomBtn(icon: Icons.remove, onTap: _zoomOut),
+              const SizedBox(width: 4),
+              Text('${(_zoom * 100).round()}%', style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontWeight: FontWeight.w700)),
+              const SizedBox(width: 4),
+              _ZoomBtn(icon: Icons.add, onTap: _zoomIn),
+              const SizedBox(width: 4),
+              _ZoomBtn(icon: Icons.fit_screen, onTap: _resetZoom, small: true),
             ],
           ),
         ),
         const SizedBox(height: 8),
         SizedBox(
-          height: 280,
-          child: CustomPaint(
-            painter: _CandlePainter(
-              candles: candles,
-              entry: entry,
-              stopLoss: stopLoss,
-              target: target,
-              support: support,
-              resistance: resistance,
-              strategyLine: strategyLine,
-              expectedMoveLow: expectedMoveLow,
-              expectedMoveHigh: expectedMoveHigh,
-              prediction: prediction,
+          height: 300,
+          child: InteractiveViewer(
+            minScale: 0.8,
+            maxScale: 3.0,
+            panEnabled: _zoom > 1.0,
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: _CandlePainter(
+                candles: visible,
+                entry: widget.entry,
+                stopLoss: widget.stopLoss,
+                target: widget.target,
+                support: widget.support,
+                resistance: widget.resistance,
+                strategyLine: widget.strategyLine,
+                expectedMoveLow: widget.expectedMoveLow,
+                expectedMoveHigh: widget.expectedMoveHigh,
+                prediction: widget.prediction,
+              ),
+              child: Container(),
             ),
-            child: Container(),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ZoomBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool small;
+
+  const _ZoomBtn({required this.icon, required this.onTap, this.small = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: EdgeInsets.all(small ? 4 : 6),
+        decoration: BoxDecoration(
+          color: AppColors.bgElevated,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Icon(icon, size: small ? 14 : 16, color: AppColors.accent),
+      ),
     );
   }
 }

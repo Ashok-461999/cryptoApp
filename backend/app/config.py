@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     scan_24h_movers_only: bool = True  # only trade highest 24h move % coins
     scalp_min_confidence: int = 82
     live_min_confidence: int = 82
-    notify_min_confidence: int = 88
+    notify_min_confidence: int = 82
     signal_cooldown_minutes: int = 15
     scalp_holding_minutes: int = 45  # quick scalp — exit if no ₹200 in 45 min
     prioritize_meme_coins: bool = True

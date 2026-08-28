@@ -102,7 +102,7 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
       _channel!.stream.listen(
         _onMessage,
         onError: (e) {
-          state = state.copyWith(connected: false, error: 'Cannot reach PC — check Settings URL');
+          state = state.copyWith(connected: false, error: 'Cannot reach AWS server — retrying…');
           _scheduleReconnect();
         },
         onDone: () {
@@ -167,7 +167,8 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
         .toList();
 
     for (final sig in list) {
-      if (!sig.notify) continue;
+      final isBest = sig.notify || sig.signalGrade == 'A+' || sig.confidence >= 82;
+      if (!isBest) continue;
       final key = '${sig.symbol}:${sig.setup}:${sig.tradeId ?? sig.timestamp}';
       if (_notifiedKeys.contains(key)) continue;
       _notifiedKeys.add(key);
@@ -179,6 +180,10 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
         entry: sig.entryPrice,
         sl: sig.stopLossPrice,
         target: sig.target1Price,
+        riskReward: sig.riskReward,
+        riskInr: sig.riskPerTradeInr > 0 ? sig.riskPerTradeInr : sig.maxLossInr,
+        targetInr: sig.targetPnlInr,
+        grade: sig.signalGrade,
       );
     }
 
