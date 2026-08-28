@@ -6,8 +6,10 @@ APP_DIR="/opt/scalptrack"
 BRANCH="${DEPLOY_BRANCH:-main}"
 
 cd "$APP_DIR"
-git fetch origin "$BRANCH"
-git reset --hard "origin/$BRANCH"
+if [[ -d .git ]]; then
+  git fetch origin "$BRANCH"
+  git reset --hard "origin/$BRANCH"
+fi
 
 cd backend
 source .venv/bin/activate

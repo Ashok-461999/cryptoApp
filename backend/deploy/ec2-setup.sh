@@ -13,7 +13,7 @@ if [[ -z "$REPO_URL" ]]; then
 fi
 
 sudo apt-get update -y
-sudo apt-get install -y python3 python3-venv python3-pip git nginx
+sudo apt-get install -y python3.13 python3.13-venv python3.13-dev git nginx
 
 sudo mkdir -p "$APP_DIR"
 sudo chown -R ubuntu:ubuntu "$APP_DIR"
@@ -23,7 +23,7 @@ if [[ ! -d "$APP_DIR/.git" ]]; then
 fi
 
 cd "$APP_DIR/backend"
-python3 -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
