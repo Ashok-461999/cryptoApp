@@ -76,25 +76,22 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('ScalpTrack', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.text)),
-                          SizedBox(height: 4),
-                          Text('Live signals · you choose TAKE or SKIP', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
-                        ],
-                      ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('ScalpTrack', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.text)),
+                        SizedBox(height: 4),
+                        Text('Live signals · you choose TAKE or SKIP', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                      ],
                     ),
-                    _LiveBadge(connected: live.connected),
-                  ],
-                ),
+                  ),
+                  _LiveBadge(connected: live.connected),
+                ],
               ),
             ),
           ),

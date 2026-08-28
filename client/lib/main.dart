@@ -60,16 +60,19 @@ class _HomeShellState extends ConsumerState<_HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: const [
-          SignalsScreen(),
-          HistoryScreen(),
-          AccountScreen(),
-          WatchlistScreen(),
-          NewsScreen(),
-          SettingsScreen(),
-        ],
+      body: SafeArea(
+        bottom: false,
+        child: IndexedStack(
+          index: _index,
+          children: const [
+            SignalsScreen(),
+            HistoryScreen(),
+            AccountScreen(),
+            WatchlistScreen(),
+            NewsScreen(),
+            SettingsScreen(),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         backgroundColor: AppColors.card,
