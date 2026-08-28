@@ -297,9 +297,9 @@ void openSymbolChart(
                     ? 'SHORT'
                     : null),
         setup: signal?['setup'] as String? ?? tracker?['strategy'] as String?,
-        entry: d(signal?['entry_price']) ?? d(chart?['strategy_line']),
-        stopLoss: d(signal?['stop_loss_price']) ?? d(chart?['stop_loss']),
-        target: d(signal?['target_1_price']) ?? d(chart?['target']),
+        entry: d(signal?['entry_price']) ?? d(tracker?['entry_price']) ?? d(chart?['strategy_line']),
+        stopLoss: d(signal?['stop_loss_price']) ?? d(tracker?['stop_loss_price']) ?? d(chart?['stop_loss']),
+        target: d(signal?['target_1_price']) ?? d(tracker?['target_1_price']) ?? d(chart?['target']),
         validityPoints: validityPoints,
         decisionReason: signal?['decision_reason'] as String? ?? tracker?['suggestion'] as String?,
         chartLevels: chart,

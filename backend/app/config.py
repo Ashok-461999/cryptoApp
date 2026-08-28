@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     top_mover_scan_count: int = 15  # top 10–15 Binance 24h % movers (Markets tab)
     top_mover_scan_min: int = 10
     mover_refresh_hours: int = 3  # re-fetch 24h % leaders every 3 hours
+    mover_levels_refresh_minutes: int = 12  # Entry/SL/TP1 valid ~12m then refresh
     top_meme_scan_count: int = 15  # alias kept for compat
     scan_24h_movers_only: bool = True  # only trade highest 24h move % coins
     scalp_min_confidence: int = 65

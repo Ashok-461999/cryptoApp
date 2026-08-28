@@ -66,8 +66,22 @@ def _run_movers_refresh():
     try:
         movers = refresh_top_movers(force=True)
         logger.info("Top movers refreshed — %d volatile coins (3h cycle)", len(movers))
+        from app.services.mover_tracker import refresh_mover_trackers
+        refresh_mover_trackers(movers, force=True)
     except Exception:
         logger.exception("Top movers refresh failed")
+
+
+def _run_levels_refresh():
+    """Refresh BTC/Gold + meme Entry/SL/TP1 every 10–15 min."""
+    try:
+        from app.services.focus_tracker import refresh_focus_trackers
+        from app.services.mover_tracker import refresh_mover_trackers
+        refresh_focus_trackers(force=True)
+        refresh_mover_trackers(force=True)
+        logger.info("Trade levels refreshed (BTC/Gold + movers)")
+    except Exception:
+        logger.exception("Levels refresh failed")
 
 
 def start_scheduler() -> None:
@@ -85,6 +99,12 @@ def start_scheduler() -> None:
         _run_movers_refresh,
         IntervalTrigger(hours=settings.mover_refresh_hours),
         id="movers_refresh",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _run_levels_refresh,
+        IntervalTrigger(minutes=settings.mover_levels_refresh_minutes),
+        id="levels_refresh",
         replace_existing=True,
     )
     _scheduler.add_job(
@@ -125,6 +145,7 @@ def start_scheduler() -> None:
     import threading
     threading.Thread(target=_run_movers_refresh, daemon=True).start()
     threading.Thread(target=_run_watchlist_refresh, daemon=True).start()
+    threading.Thread(target=_run_levels_refresh, daemon=True).start()
     threading.Thread(target=_run_scan, daemon=True).start()
 
 

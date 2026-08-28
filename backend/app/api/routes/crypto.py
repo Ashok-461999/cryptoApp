@@ -6,6 +6,7 @@ from app.services.chart_candles import get_chart_candles
 from app.services.crypto_futures_client import futures_client
 from app.services.crypto_watchlist import get_meme_coins, get_movers_cache_meta, get_top_24h_movers, get_watchlist, refresh_top_movers, refresh_watchlist
 from app.services.focus_tracker import get_btc_gold_tracker
+from app.services.mover_tracker import attach_mover_tracker, refresh_mover_trackers
 from app.services.signal_tracker import get_today_trades_map
 from app.signals.crypto_scanner import crypto_scanner
 
@@ -65,6 +66,7 @@ def get_candles(
 @router.get("/markets")
 def get_market_overview():
     """BTC, ETH, GOLD + meme sentiment strip for home/markets screen."""
+    settings = get_settings()
     tickers = binance_data.get_ticker_24hr()
     trade_map = get_today_trades_map()
     highlights = []
@@ -101,6 +103,8 @@ def get_market_overview():
             d["trade_status"] = trade.get("outcome") or trade.get("status")
         else:
             d["trade_status"] = None
+        d["signals"] = _active_signals_for_symbol(s.symbol)
+        d = attach_mover_tracker(d, s)
         meme_coins.append(d)
 
     total = bullish + bearish or 1
@@ -127,6 +131,7 @@ def get_market_overview():
             "bearish_count": bearish,
         },
         "tracking": _tracking_block(),
+        "levels_refresh_minutes": settings.mover_levels_refresh_minutes,
         "exchange": "binance_futures",
     }
 

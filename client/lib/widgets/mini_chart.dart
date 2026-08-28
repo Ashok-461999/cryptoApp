@@ -34,14 +34,9 @@ class MiniScalpChart extends StatelessWidget {
     final minY = ([...prices, stopLoss, target].reduce((a, b) => a < b ? a : b)) * 0.999;
     final maxY = ([...prices, entry, target].reduce((a, b) => a > b ? a : b)) * 1.001;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Chart · $timeframe scalp', style: const TextStyle(fontSize: 10, color: AppColors.accent, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 6),
-        SizedBox(
-          height: 130,
-          child: LineChart(
+    return SizedBox(
+      height: 130,
+      child: LineChart(
             LineChartData(
               minY: minY,
               maxY: maxY,
@@ -67,8 +62,6 @@ class MiniScalpChart extends StatelessWidget {
               ),
             ),
           ),
-        ),
-      ],
     );
   }
 }

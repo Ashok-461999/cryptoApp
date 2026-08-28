@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../theme/app_theme.dart';
 import '../utils/price_format.dart';
 
-/// Always-visible BTC & Gold bullish/bearish tracker with strategy line + suggestion.
+/// Always-visible BTC & Gold tracker — fresh Entry / SL / TP1 every ~12 min.
 class BtcGoldTracker extends StatelessWidget {
   final List<Map<String, dynamic>> items;
   final void Function(Map<String, dynamic> item)? onTap;
@@ -21,7 +22,7 @@ class BtcGoldTracker extends StatelessWidget {
           children: [
             Text('BTC & GOLD TRACKER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 1)),
             Spacer(),
-            Text('Live prediction', style: TextStyle(fontSize: 9, color: AppColors.textMuted)),
+            Text('Entry · SL · TP1 refresh ~12m', style: TextStyle(fontSize: 9, color: AppColors.textMuted)),
           ],
         ),
         const SizedBox(height: 8),
@@ -41,6 +42,27 @@ class _FocusTrackerCard extends StatelessWidget {
 
   String _predLabel(String p) => p == 'bullish' ? 'BULLISH' : (p == 'bearish' ? 'BEARISH' : 'NEUTRAL');
 
+  String _fmtTime(String? iso) {
+    if (iso == null || iso.isEmpty) return '—';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return DateFormat('HH:mm').format(dt);
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  bool _isExpired(String? validUntil) {
+    if (validUntil == null || validUntil.isEmpty) return false;
+    try {
+      return DateTime.parse(validUntil).toLocal().isBefore(DateTime.now());
+    } catch (_) {
+      return false;
+    }
+  }
+
+  double? _d(dynamic v) => v is num ? v.toDouble() : double.tryParse('$v');
+
   @override
   Widget build(BuildContext context) {
     final base = item['base']?.toString() ?? '';
@@ -50,15 +72,19 @@ class _FocusTrackerCard extends StatelessWidget {
     final color = _predColor(prediction);
     final price = (item['last_price'] as num?)?.toDouble() ?? 0;
     final confidence = item['confidence'] ?? 0;
+    final bullishPct = (item['bullish_pct'] as num?)?.toDouble() ?? confidence.toDouble();
+    final expectedMove = (item['expected_move_pct'] as num?)?.toDouble() ?? 0;
     final strategy = item['strategy_label']?.toString() ?? 'Market Structure';
     final suggestion = item['suggestion']?.toString() ?? '';
     final structure = item['market_structure']?.toString() ?? '';
     final levels = item['levels'] as Map<String, dynamic>? ?? {};
-    final strategyLine = (levels['strategy_line'] as num?)?.toDouble() ?? 0;
-    final support = (levels['support'] as num?)?.toDouble() ?? 0;
-    final resistance = (levels['resistance'] as num?)?.toDouble() ?? 0;
-    final sl = (levels['stop_loss'] as num?)?.toDouble() ?? 0;
-    final target = (levels['target'] as num?)?.toDouble() ?? 0;
+    final support = _d(levels['support']) ?? 0;
+    final resistance = _d(levels['resistance']) ?? 0;
+    final entry = _d(item['entry_price']) ?? _d(levels['entry']);
+    final sl = _d(item['stop_loss_price']) ?? _d(levels['stop_loss']);
+    final target = _d(item['target_1_price']) ?? _d(levels['target']);
+    final hasTrade = action != 'WAIT' && entry != null && entry > 0 && sl != null && sl > 0 && target != null && target > 0;
+    final expired = _isExpired(item['valid_until']?.toString());
     final hasLive = item['has_live_signal'] == true;
 
     return InkWell(
@@ -70,7 +96,7 @@ class _FocusTrackerCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.45), width: 1.5),
+          border: Border.all(color: expired ? AppColors.warn.withValues(alpha: 0.6) : color.withValues(alpha: 0.45), width: 1.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,16 +135,28 @@ class _FocusTrackerCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Row(
               children: [
-                _MiniLevel('Strategy', strategy, AppColors.accent),
+                _MiniLevel('Strategy', strategy, AppColors.accentBlue),
                 const SizedBox(width: 6),
-                _MiniLevel('Line', formatPrice(strategyLine), AppColors.accentBlue),
+                _MiniLevel('Bull %', '${bullishPct.round()}%', color),
                 const SizedBox(width: 6),
-                _MiniLevel('Conf', '$confidence%', color),
+                _MiniLevel('Move', hasTrade ? '${expectedMove.toStringAsFixed(1)}%' : '—', AppColors.gold),
               ],
             ),
+            if (hasTrade) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: _MiniLevel('Entry', formatPrice(entry), AppColors.accent)),
+                  const SizedBox(width: 6),
+                  Expanded(child: _MiniLevel('SL', formatPrice(sl), AppColors.loss)),
+                  const SizedBox(width: 6),
+                  Expanded(child: _MiniLevel('TP1', formatPrice(target), AppColors.profit)),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             Row(
               children: [
@@ -128,14 +166,13 @@ class _FocusTrackerCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: _MiniLevel('SL', formatPrice(sl), AppColors.loss)),
-                const SizedBox(width: 6),
-                Expanded(child: _MiniLevel('Target', formatPrice(target), AppColors.profit)),
-              ],
+            Text(
+              hasTrade
+                  ? 'Entry ${_fmtTime(item['entry_time']?.toString())} · valid until ${_fmtTime(item['valid_until']?.toString())}${expired ? ' · EXPIRED' : ''}'
+                  : 'No trade levels — wait for BUY/SELL prediction',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: expired ? AppColors.warn : AppColors.textMuted),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(suggestion, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color, height: 1.35)),
             const SizedBox(height: 4),
             Text(structure, style: const TextStyle(fontSize: 10, color: AppColors.textMuted, height: 1.3)),
@@ -148,7 +185,7 @@ class _FocusTrackerCard extends StatelessWidget {
                   color: AppColors.profit.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text('📡 Live setup active — check Signals tab', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.profit)),
+                child: const Text('📡 Live setup — levels match current scan', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.profit)),
               ),
             ],
           ],

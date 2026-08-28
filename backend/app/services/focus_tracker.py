@@ -1,19 +1,25 @@
-"""BTC & Gold focus tracker — structure bias, strategy line, buy/sell suggestion."""
+"""BTC & Gold focus tracker — fresh Entry / SL / TP1 every 10–15 min from live prediction."""
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 
+from app.config import get_settings
 from app.services.crypto_futures_client import futures_client
 from app.signals.crypto_scanner import crypto_scanner
+from app.signals.indicators import atr_pct
 from app.signals.market_structure import swing_high_low
 from app.signals.regime import detect_regime
+from app.signals.schemas import T1_R
 from app.signals.setups import SETUP_FUNCTIONS
+from app.signals.sl_levels import normalize_stop_loss
 from app.signals.trade_decision import SETUP_PRIORITY, evaluate_trade_decision
 
 logger = logging.getLogger(__name__)
 
 _news_cache: dict = {"at": None, "items": []}
+_focus_cache: dict[str, dict] = {}
 
 FOCUS_PAIRS = (
     ("BTCUSDT", "BTC", "🟡"),
@@ -29,11 +35,25 @@ _SETUP_LABELS = {
     "anchored_vwap": "Anchored VWAP",
     "volume_profile": "Volume Profile",
     "supply_demand": "Supply & Demand",
-    "fvg_retest": "FVG Retest",
     "fibonacci_retrace": "Fibonacci",
     "structure_reversal": "Structure Reversal",
-    "orb_breakout": "ORB Breakout",
 }
+
+
+def _ttl_minutes() -> int:
+    return max(10, min(15, get_settings().mover_levels_refresh_minutes))
+
+
+def _cache_valid(symbol: str, force: bool) -> bool:
+    if force:
+        return False
+    row = _focus_cache.get(symbol.upper())
+    if not row:
+        return False
+    at = row.get("cached_at")
+    if not isinstance(at, datetime):
+        return False
+    return datetime.now(timezone.utc) - at < timedelta(minutes=_ttl_minutes())
 
 
 def _structure_note(regime, swing_high: float, swing_low: float, price: float) -> str:
@@ -47,17 +67,18 @@ def _structure_note(regime, swing_high: float, swing_low: float, price: float) -
     return f"Neutral-bearish — price below range mid ({regime.summary})"
 
 
-def _suggestion(action: str, prediction: str, setup_name: str | None, has_signal: bool) -> str:
+def _suggestion(action: str, prediction: str, setup_name: str | None, has_signal: bool, valid_until: datetime) -> str:
     label = _SETUP_LABELS.get(setup_name or "", setup_name or "structure")
+    until = valid_until.strftime("%H:%M UTC")
+    if action == "WAIT":
+        return f"WAIT — no clear edge; fresh levels at {until}"
     if has_signal and action == "BUY":
-        return f"BUY bias — {label} active · enter on 1m confirm"
+        return f"BUY — {label} · enter before {until} or wait for refresh"
     if has_signal and action == "SELL":
-        return f"SELL bias — {label} active · short on 1m confirm"
+        return f"SELL — {label} · short before {until} or wait for refresh"
     if action == "BUY":
-        return f"Bullish prediction — watch {label} retest or sweep of lows"
-    if action == "SELL":
-        return f"Bearish prediction — watch {label} rejection or sweep of highs"
-    return "WAIT — no clear edge; let structure form"
+        return f"Bullish prediction — {label} · entry valid until {until}"
+    return f"Bearish prediction — {label} · entry valid until {until}"
 
 
 def _best_setup(df, regime) -> tuple[str | None, dict | None]:
@@ -68,32 +89,44 @@ def _best_setup(df, regime) -> tuple[str | None, dict | None]:
             result = fn(df)
         except Exception:
             continue
-        if not result.fired:
+        if not result.fired or not result.stop_loss:
             continue
         decision = evaluate_trade_decision(name, result, regime, "major")
         if not decision["can_take"]:
             continue
         conf = decision["take_confidence"]
         if best is None or conf > best["confidence"]:
-            pri = SETUP_PRIORITY.get(name, 9)
             best_name = name
             best = {
                 "setup": name,
                 "confidence": conf,
                 "direction": "LONG" if result.direction == "bullish" else "SHORT",
-                "entry": result.entry,
-                "stop_loss": result.stop_loss,
-                "target": result.targets[0] if result.targets else None,
+                "proposed_stop": float(result.stop_loss),
                 "reason": result.reason,
-                "priority": pri,
+                "sl_basis": result.sl_basis,
+                "priority": SETUP_PRIORITY.get(name, 9),
             }
     return best_name, best
 
 
-def _news_context(base: str) -> dict:
-    """Light news bias for BTC / GOLD (cached 2 min)."""
-    from datetime import datetime, timedelta, timezone
+def _parse_ts(raw: str | None, fallback: datetime) -> datetime:
+    if not raw:
+        return fallback
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return fallback
 
+
+def _live_is_fresh(live: dict, now: datetime, ttl: int) -> bool:
+    ts = _parse_ts(live.get("timestamp"), now)
+    return (now - ts) < timedelta(minutes=ttl)
+
+
+def _news_context(base: str) -> dict:
     global _news_cache
     now = datetime.now(timezone.utc)
     cached_at = _news_cache.get("at")
@@ -134,26 +167,68 @@ def _news_context(base: str) -> dict:
     }
 
 
-def analyze_focus_pair(symbol: str, base: str, icon: str) -> dict:
+def _compute_levels(
+    *,
+    price: float,
+    direction: str,
+    proposed_sl: float,
+    bar_low: float,
+    bar_high: float,
+    swing_low: float,
+    swing_high: float,
+    atr_val: float,
+    tier: str,
+) -> tuple[float, float, float]:
+    """Entry at current price, normalized SL, TP1 at 1:3 R:R."""
+    entry = price
+    sl = normalize_stop_loss(
+        entry=entry,
+        direction="bullish" if direction == "LONG" else "bearish",
+        proposed_stop=proposed_sl,
+        bar_low=bar_low,
+        bar_high=bar_high,
+        swing_low=swing_low,
+        swing_high=swing_high,
+        atr=atr_val,
+        tier=tier,
+    )
+    risk = abs(entry - sl)
+    if risk <= 0:
+        risk = entry * 0.005
+        sl = entry - risk if direction == "LONG" else entry + risk
+    sign = 1 if direction == "LONG" else -1
+    t1 = entry + sign * risk * T1_R
+    return entry, sl, t1
+
+
+def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -> dict:
+    sym = symbol.upper()
+    if _cache_valid(sym, force):
+        return dict(_focus_cache[sym]["data"])
+
+    now = datetime.now(timezone.utc)
+    ttl = _ttl_minutes()
+    valid_until = now + timedelta(minutes=ttl)
+
     candles = futures_client.get_futures_candles(symbol, "5m", 120)
     if len(candles) < 30:
-        return _fallback(symbol, base, icon, "insufficient data")
+        return _fallback(symbol, base, icon, "insufficient data", now, valid_until, ttl)
 
     df = futures_client.candles_to_df(candles)
     bar = df.iloc[-1]
     price = float(bar["close"])
     regime = detect_regime(df)
     swing_high, swing_low = swing_high_low(df)
+    atr_p = atr_pct(df)
+    atr_val = price * atr_p / 100.0 if atr_p > 0 else price * 0.008
     mid = (swing_high + swing_low) / 2
+    tier = "A" if base == "BTC" else "B"
 
     setup_name, setup = _best_setup(df, regime)
-    live_signals = [
-        s for s in crypto_scanner.get_active_signals()
-        if (s.get("symbol") or "").upper() == symbol.upper()
-    ]
-    live = live_signals[0] if live_signals else None
+    live_list = [s for s in crypto_scanner.get_active_signals() if (s.get("symbol") or "").upper() == sym]
+    live = live_list[0] if live_list else None
+    live_fresh = live is not None and _live_is_fresh(live, now, ttl)
 
-    # Prediction from structure + momentum + setup direction
     recent = df.tail(12)
     mom = (float(recent["close"].iloc[-1]) - float(recent["close"].iloc[0])) / float(recent["close"].iloc[0]) * 100
     score = 0
@@ -170,74 +245,128 @@ def analyze_focus_pair(symbol: str, base: str, icon: str) -> dict:
     elif mom < -0.15:
         score -= 1
     if setup:
-        if setup["direction"] == "LONG":
-            score += 2
-        else:
-            score -= 2
+        score += 2 if setup["direction"] == "LONG" else -2
 
     if score >= 2:
         prediction = "bullish"
         action = "BUY"
+        direction = "LONG"
     elif score <= -2:
         prediction = "bearish"
         action = "SELL"
+        direction = "SHORT"
     else:
         prediction = "neutral"
         action = "WAIT"
+        direction = "LONG" if price >= mid else "SHORT"
 
-    if live:
-        action = "BUY" if (live.get("direction") or "").upper() == "LONG" else "SELL"
-        prediction = "bullish" if action == "BUY" else "bearish"
+    entry_dt = now
+    levels_source = "structure"
+
+    if live_fresh:
+        direction = (live.get("direction") or "LONG").upper()
+        action = "BUY" if direction == "LONG" else "SELL"
+        prediction = "bullish" if direction == "LONG" else "bearish"
         setup_name = live.get("setup") or setup_name
-        entry = float(live.get("entry_price") or price)
-        sl = float(live.get("stop_loss_price") or swing_low)
-        target = float(live.get("target_1_price") or swing_high)
+        entry = price
+        entry, sl, target = _compute_levels(
+            price=price,
+            direction=direction,
+            proposed_sl=float(live.get("stop_loss_price") or swing_low),
+            bar_low=float(bar["low"]),
+            bar_high=float(bar["high"]),
+            swing_low=swing_low,
+            swing_high=swing_high,
+            atr_val=atr_val,
+            tier=tier,
+        )
         confidence = int(live.get("confidence") or 80)
-    elif setup:
-        entry = float(setup["entry"] or price)
-        sl = float(setup["stop_loss"] or swing_low)
-        target = float(setup["target"] or swing_high)
+        entry_dt = _parse_ts(live.get("timestamp"), now)
+        levels_source = "live_signal"
+    elif setup and action != "WAIT":
+        direction = setup["direction"]
+        action = "BUY" if direction == "LONG" else "SELL"
+        prediction = "bullish" if direction == "LONG" else "bearish"
+        setup_name = setup["setup"]
+        entry, sl, target = _compute_levels(
+            price=price,
+            direction=direction,
+            proposed_sl=setup["proposed_stop"],
+            bar_low=float(bar["low"]),
+            bar_high=float(bar["high"]),
+            swing_low=swing_low,
+            swing_high=swing_high,
+            atr_val=atr_val,
+            tier=tier,
+        )
         confidence = setup["confidence"]
-        action = "BUY" if setup["direction"] == "LONG" else "SELL"
-        prediction = "bullish" if action == "BUY" else "bearish"
+        levels_source = "setup_scan"
+    elif action != "WAIT":
+        entry, sl, target = _compute_levels(
+            price=price,
+            direction=direction,
+            proposed_sl=swing_low if direction == "LONG" else swing_high,
+            bar_low=float(bar["low"]),
+            bar_high=float(bar["high"]),
+            swing_low=swing_low,
+            swing_high=swing_high,
+            atr_val=atr_val,
+            tier=tier,
+        )
+        confidence = max(55, min(78, 60 + abs(score) * 5))
+        levels_source = "momentum"
     else:
-        entry = mid
-        sl = swing_low if prediction != "bearish" else swing_high
-        target = swing_high if prediction != "bearish" else swing_low
-        confidence = max(55, min(72, 60 + abs(score) * 5))
+        entry = price
+        sl = 0.0
+        target = 0.0
+        confidence = max(50, min(65, 55 + abs(int(score))))
 
     news = _news_context(base)
-    if prediction == "bullish" and news["bias"] == "bearish":
-        confidence = max(50, confidence - 5)
-    elif prediction == "bearish" and news["bias"] == "bullish":
-        confidence = max(50, confidence - 5)
-    elif prediction == news["bias"] and prediction != "neutral":
-        confidence = min(95, confidence + 4)
+    if action != "WAIT":
+        if prediction == "bullish" and news["bias"] == "bearish":
+            confidence = max(50, confidence - 5)
+        elif prediction == "bearish" and news["bias"] == "bullish":
+            confidence = max(50, confidence - 5)
+        elif prediction == news["bias"]:
+            confidence = min(95, confidence + 4)
 
-    if prediction == "bullish":
+    expected_move_pct = round(abs(target - entry) / entry * 100, 2) if entry > 0 and target > 0 else 0.0
+    bullish_pct = confidence if prediction == "bullish" else (100 - confidence if prediction == "bearish" else 50)
+
+    if prediction == "bullish" and target > 0:
         exp_low, exp_high = min(entry, price), max(target, swing_high)
-    elif prediction == "bearish":
+    elif prediction == "bearish" and target > 0:
         exp_high, exp_low = max(entry, price), min(target, swing_low)
     else:
         exp_low, exp_high = swing_low, swing_high
 
+    label = _SETUP_LABELS.get(setup_name or "", "Market Structure")
     chart_note = (
-        f"{_SETUP_LABELS.get(setup_name or '', 'Structure')} · "
-        f"{'↑' if prediction == 'bullish' else '↓' if prediction == 'bearish' else '↔'} "
-        f"expected move to {round(exp_high if prediction != 'bearish' else exp_low, 2)}"
+        f"{label} · {'↑' if prediction == 'bullish' else '↓' if prediction == 'bearish' else '↔'} "
+        f"{'expected ' + str(expected_move_pct) + '% to TP1' if action != 'WAIT' else 'no trade yet'}"
     )
 
-    return {
+    data = {
         "symbol": symbol,
         "base": base,
         "icon": icon,
         "last_price": round(price, 8),
         "prediction": prediction,
         "action": action,
+        "direction": direction if action != "WAIT" else None,
         "confidence": confidence,
+        "bullish_pct": bullish_pct,
+        "expected_move_pct": expected_move_pct,
+        "entry_price": round(entry, 8) if action != "WAIT" else None,
+        "stop_loss_price": round(sl, 8) if action != "WAIT" else None,
+        "target_1_price": round(target, 8) if action != "WAIT" else None,
+        "entry_time": entry_dt.isoformat(),
+        "valid_until": valid_until.isoformat(),
+        "levels_ttl_minutes": ttl,
+        "levels_source": levels_source,
         "strategy": setup_name,
-        "strategy_label": _SETUP_LABELS.get(setup_name or "", "Market Structure"),
-        "suggestion": _suggestion(action, prediction, setup_name, live is not None),
+        "strategy_label": label,
+        "suggestion": _suggestion(action, prediction, setup_name, live_fresh, valid_until),
         "market_structure": _structure_note(regime, swing_high, swing_low, price),
         "momentum_pct": round(mom, 3),
         "regime": regime.regime.value,
@@ -245,42 +374,56 @@ def analyze_focus_pair(symbol: str, base: str, icon: str) -> dict:
         "levels": {
             "support": round(swing_low, 8),
             "resistance": round(swing_high, 8),
-            "strategy_line": round(entry, 8),
-            "stop_loss": round(sl, 8),
-            "target": round(target, 8),
+            "strategy_line": round(entry, 8) if action != "WAIT" else round(mid, 8),
+            "entry": round(entry, 8) if action != "WAIT" else None,
+            "stop_loss": round(sl, 8) if action != "WAIT" else None,
+            "target": round(target, 8) if action != "WAIT" else None,
             "expected_move_low": round(exp_low, 8),
             "expected_move_high": round(exp_high, 8),
         },
         "chart": {
             "support": round(swing_low, 8),
             "resistance": round(swing_high, 8),
-            "strategy_line": round(entry, 8),
-            "stop_loss": round(sl, 8),
-            "target": round(target, 8),
+            "strategy_line": round(entry, 8) if action != "WAIT" else round(mid, 8),
+            "stop_loss": round(sl, 8) if action != "WAIT" else None,
+            "target": round(target, 8) if action != "WAIT" else None,
             "expected_move_low": round(exp_low, 8),
             "expected_move_high": round(exp_high, 8),
             "prediction": prediction,
             "note": chart_note,
         },
         "news_context": news,
-        "has_live_signal": live is not None,
+        "has_live_signal": live_fresh,
         "live_signal": {
             "direction": live.get("direction"),
             "setup": live.get("setup"),
             "confidence": live.get("confidence"),
-        } if live else None,
+        } if live_fresh else None,
     }
 
+    _focus_cache[sym] = {"cached_at": now, "data": data}
+    return dict(data)
 
-def _fallback(symbol: str, base: str, icon: str, reason: str) -> dict:
-    return {
+
+def _fallback(symbol: str, base: str, icon: str, reason: str, now: datetime, valid_until: datetime, ttl: int) -> dict:
+    data = {
         "symbol": symbol,
         "base": base,
         "icon": icon,
         "last_price": 0,
         "prediction": "neutral",
         "action": "WAIT",
+        "direction": None,
         "confidence": 0,
+        "bullish_pct": 50,
+        "expected_move_pct": 0.0,
+        "entry_price": None,
+        "stop_loss_price": None,
+        "target_1_price": None,
+        "entry_time": now.isoformat(),
+        "valid_until": valid_until.isoformat(),
+        "levels_ttl_minutes": ttl,
+        "levels_source": "fallback",
         "strategy": None,
         "strategy_label": "Loading",
         "suggestion": f"WAIT — {reason}",
@@ -295,14 +438,29 @@ def _fallback(symbol: str, base: str, icon: str, reason: str) -> dict:
         "has_live_signal": False,
         "live_signal": None,
     }
+    _focus_cache[symbol.upper()] = {"cached_at": now, "data": data}
+    return dict(data)
 
 
-def get_btc_gold_tracker() -> list[dict]:
+def refresh_focus_trackers(force: bool = True) -> int:
+    n = 0
+    for sym, base, icon in FOCUS_PAIRS:
+        try:
+            analyze_focus_pair(sym, base, icon, force=force)
+            n += 1
+        except Exception:
+            logger.exception("Focus tracker refresh failed for %s", sym)
+    logger.info("BTC/Gold levels refreshed (%dm TTL)", _ttl_minutes())
+    return n
+
+
+def get_btc_gold_tracker(force: bool = False) -> list[dict]:
     out: list[dict] = []
     for sym, base, icon in FOCUS_PAIRS:
         try:
-            out.append(analyze_focus_pair(sym, base, icon))
+            out.append(analyze_focus_pair(sym, base, icon, force=force))
         except Exception:
             logger.exception("Focus tracker failed for %s", sym)
-            out.append(_fallback(sym, base, icon, "analysis unavailable"))
+            now = datetime.now(timezone.utc)
+            out.append(_fallback(sym, base, icon, "analysis unavailable", now, now + timedelta(minutes=_ttl_minutes()), _ttl_minutes()))
     return out

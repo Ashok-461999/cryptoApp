@@ -28,7 +28,7 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
   @override
   void initState() {
     super.initState();
-    _marketsTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _marketsTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       ref.invalidate(marketsProvider);
     });
   }

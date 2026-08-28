@@ -70,14 +70,6 @@ class _TradingChartState extends State<TradingChart> {
     if (_chartReady && !widget.loading) _pushChartData();
   }
 
-  double? get _lastPrice {
-    if (widget.candles.isEmpty) return null;
-    final v = widget.candles.last['close'];
-    return v is num ? v.toDouble() : double.tryParse('$v');
-  }
-
-  String _fmt(double price) => price >= 1000 ? price.toStringAsFixed(2) : price.toStringAsFixed(4);
-
   Future<void> _pushChartData() async {
     if (!_chartReady || widget.candles.length < 2) return;
     final payload = jsonEncode({
@@ -111,68 +103,18 @@ class _TradingChartState extends State<TradingChart> {
       );
     }
 
-    final last = _lastPrice;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-          child: Wrap(
-            spacing: 10,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text('Chart · ${widget.interval}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accent)),
-              if (last != null)
-                Text('Last ${_fmt(last)}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.gold)),
-              const _LegendDot(color: AppColors.profit, label: 'Support'),
-              const _LegendDot(color: AppColors.loss, label: 'Resistance'),
-              const _LegendDot(color: AppColors.accentBlue, label: 'Strategy'),
-              const _LegendDot(color: AppColors.accent, label: 'Entry'),
-            ],
-          ),
-        ),
-        Container(
-          height: _chartHeight,
-          decoration: BoxDecoration(
-            color: AppColors.bg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: WebViewWidget(
-            controller: _controller,
-            gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            'TradingView chart · pinch to zoom · drag to scroll · crosshair on tap',
-            style: TextStyle(fontSize: 10, color: AppColors.textMuted.withValues(alpha: 0.85)),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LegendDot extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _LegendDot({required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 9, color: color)),
-      ],
+    return Container(
+      height: _chartHeight,
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: WebViewWidget(
+        controller: _controller,
+        gestureRecognizers: {Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer())},
+      ),
     );
   }
 }
