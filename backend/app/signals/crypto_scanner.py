@@ -106,7 +106,7 @@ class CryptoScanner:
             return "MAX WIN"
         if conf >= 85 and signal.get("notify"):
             return "DEF BUY"
-        return "A+ 1:2"
+        return "A+ 1:3"
 
     def _assign_priority(self, signal: dict, settings, high_slots_left: int) -> tuple[dict, int]:
         """Return signal with priority fields and updated high_slots_left."""
@@ -335,11 +335,11 @@ class CryptoScanner:
         if full_range <= 0:
             return False
         body_pct = abs(body) / full_range
-        if body_pct < 0.38:
+        if body_pct < 0.25:
             return False
         vol = float(bar["volume"])
         avg_vol = float(df["volume"].tail(20).mean()) if len(df) >= 20 else vol
-        if vol < avg_vol * 1.05:
+        if vol < avg_vol * 0.85:
             return False
         if direction == "bullish":
             return body > 0 and float(bar["close"]) > float(prev["high"])
@@ -420,13 +420,13 @@ class CryptoScanner:
                 continue
 
             confidence = decision["take_confidence"]
-            min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.scalp_min_confidence
+            min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
             if confidence < min_conf:
                 continue
             notify = confidence >= settings.notify_min_confidence or (
-                decision.get("strategy_tier") == "TOP" and confidence >= 80 and plan.risk_reward >= 2.0
+                decision.get("strategy_tier") == "TOP" and confidence >= 78 and plan.risk_reward >= settings.min_rr_for_take
             )
-            rr_label = "1:2" if plan.risk_reward >= 1.9 else ("1:1" if plan.risk_reward >= 0.9 else f"1:{plan.risk_reward:.1f}")
+            rr_label = "1:3" if plan.risk_reward >= 2.9 else ("1:2" if plan.risk_reward >= 1.9 else f"1:{plan.risk_reward:.1f}")
 
             signal = plan.to_dict()
             signal.update({
@@ -434,7 +434,7 @@ class CryptoScanner:
                 "confidence": confidence,
                 "notify": notify,
                 "rr_label": rr_label,
-                "signal_grade": "A+" if notify else "A",
+                "signal_grade": decision.get("signal_grade", "A+" if notify else "A"),
                 "strategy_tier": decision.get("strategy_tier", "TOP" if setup_name in TOP_SETUPS else "STD"),
                 "decision_reason": decision["decision_reason"],
                 "regime": regime.regime.value,
@@ -451,7 +451,7 @@ class CryptoScanner:
                     f"Risk:Reward {round(plan.risk_reward, 2)} to T1 (min {settings.min_rr_for_take})",
                     f"Confidence: {confidence}% — {'A+ NOTIFY' if notify else 'A quality scalp'}",
                     f"SL basis: {result.sl_basis}",
-                    f"Leverage: {plan.leverage}x · Risk ₹{settings.risk_per_trade_inr:.0f} · Scalp target ₹{settings.scalp_target_inr:.0f}+ (1:2)",
+                    f"Leverage: {plan.leverage}x · Risk ₹{settings.risk_per_trade_inr:.0f} · Target ₹{settings.scalp_target_inr:.0f}+ (1:3)",
                     f"24h move: {sym.change_pct_24h:+.1f}% · Funding: {round(funding, 4)}% · {sym.category.upper()}",
                 ],
                 "volume_24h": sym.volume_24h_usdt,
@@ -478,35 +478,29 @@ class CryptoScanner:
         if not results:
             return []
 
-        by_dir: dict[str, list[dict]] = {"LONG": [], "SHORT": []}
-        for r in results:
-            d = (r.get("direction") or "LONG").upper()
-            by_dir.setdefault(d, []).append(r)
+        max_per_sym = 3 if sym.pair in FOCUS_PAIRS else 2
 
-        allow_both = sym.pair in FOCUS_PAIRS
-        picked: list[dict] = []
-
-        def _best(items: list[dict]) -> dict | None:
+        def _top_setups(items: list[dict], limit: int) -> list[dict]:
             if not items:
-                return None
+                return []
             items.sort(key=lambda s: (
                 SETUP_PRIORITY.get(s.get("setup", ""), 9),
                 -s.get("confidence", 0),
                 -s.get("risk_reward", 0),
             ))
-            return items[0]
+            seen: set[str] = set()
+            out: list[dict] = []
+            for item in items:
+                setup = item.get("setup", "")
+                if setup in seen:
+                    continue
+                seen.add(setup)
+                out.append(item)
+                if len(out) >= limit:
+                    break
+            return out
 
-        if allow_both:
-            for d in ("LONG", "SHORT"):
-                best = _best(by_dir.get(d, []))
-                if best:
-                    picked.append(best)
-        else:
-            all_best = _best(results)
-            if all_best:
-                picked.append(all_best)
-
-        return picked
+        return _top_setups(results, max_per_sym)
 
 
 crypto_scanner = CryptoScanner()

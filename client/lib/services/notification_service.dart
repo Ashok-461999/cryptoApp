@@ -17,6 +17,7 @@ class NotificationService {
   }
 
   String _rrLabel(double rr) {
+    if (rr >= 2.9) return '1:3';
     if (rr >= 1.9) return '1:2';
     if (rr >= 0.9) return '1:1';
     return '1:${rr.toStringAsFixed(1)}';
@@ -30,9 +31,9 @@ class NotificationService {
     required double entry,
     required double sl,
     required double target,
-    double riskReward = 2.0,
-    double riskInr = 100,
-    double targetInr = 200,
+    double riskReward = 3.0,
+    double riskInr = 200,
+    double targetInr = 600,
     String grade = 'A+',
   }) async {
     final key = '$symbol-$setup-${DateTime.now().toIso8601String().substring(0, 16)}';
@@ -44,7 +45,7 @@ class NotificationService {
     const android = AndroidNotificationDetails(
       'scalp_signals',
       'Best Scalp Signals',
-      channelDescription: 'A+ signals with 1:2 or 1:1 R:R on top movers',
+      channelDescription: 'A+ signals with 1:3 or 1:2 R:R on top movers',
       importance: Importance.max,
       priority: Priority.high,
       styleInformation: BigTextStyleInformation(''),

@@ -76,22 +76,25 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('ScalpTrack', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.text)),
-                        SizedBox(height: 4),
-                        Text('Live signals · you choose TAKE or SKIP', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
-                      ],
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('ScalpTrack', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.text)),
+                          SizedBox(height: 4),
+                          Text('Live signals · you choose TAKE or SKIP', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                        ],
+                      ),
                     ),
-                  ),
-                  _LiveBadge(connected: live.connected),
-                ],
+                    _LiveBadge(connected: live.connected),
+                  ],
+                ),
               ),
             ),
           ),
@@ -204,7 +207,7 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
             SliverFillRemaining(
               child: Center(
                 child: Text(
-                  'No CAN TAKE signals right now\n(${live.totalScanned} coins scanned)',
+                  'No live signals yet — scanning all strategies\n(${live.totalScanned} coins · HIGH = highlighted A+)',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textMuted.withValues(alpha: 0.8)),
                 ),
@@ -288,17 +291,17 @@ class _DailyGoalBanner extends StatelessWidget {
             const Text('ScalpTrack Live', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.text, fontSize: 20)),
           const SizedBox(height: 4),
           Text(
-            '₹20,000 · ₹100 risk · ₹200 scalp win · 24h movers · Order Flow + VWAP',
+            '₹20,000 · ₹200 risk · ₹600+ scalp win · all strategies · Order Flow + VWAP',
             style: const TextStyle(fontSize: 11, color: AppColors.accent),
           ),
           const SizedBox(height: 4),
           Text(
-            '40 A+ signals/day · max 70 · 1:2 R:R',
+            '40 HIGH priority/day · max 70 · 1:3 R:R · NORMAL = all strategy signals',
             style: const TextStyle(fontSize: 12, color: AppColors.gold, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
-            'Signals today: $takeCount · cap: $takeCap · strict strategy engine',
+            'Signals today: $takeCount · cap: $takeCap · all strategy types enabled',
             style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
           if (lastClosed != null) ...[
@@ -474,7 +477,7 @@ class _CryptoSignalCardState extends ConsumerState<_CryptoSignalCard> {
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(6)),
                         child: Text(
-                          signal.riskReward >= 1.9 ? 'A+ 1:2' : 'A+ 1:1',
+                          signal.riskReward >= 2.9 ? 'A+ 1:3' : (signal.riskReward >= 1.9 ? 'A+ 1:2' : 'A+ 1:1'),
                           style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.bg),
                         ),
                       ),

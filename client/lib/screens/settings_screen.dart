@@ -171,7 +171,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    cfg['why_this_trade'] ?? 'Top 24h movers · 1:2 scalp · AWS backend live',
+                    cfg['why_this_trade'] ?? 'Top 24h movers · 1:3 scalp · AWS backend live',
                     style: const TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.45),
                   ),
                 ),
@@ -190,7 +190,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               SizedBox(height: 8),
               Text(
                 '• Trade only A+ signals (82%+ confidence)\n'
-                '• Stick to 1:2 R:R — risk ₹100, target ₹200\n'
+                '• Stick to 1:3 R:R — risk ₹200, target ₹600+\n'
                 '• Use chart zoom on BTC to confirm entry\n'
                 '• Take notification alerts seriously\n'
                 '• Max 3–5 trades/day — quality over quantity',

@@ -4,18 +4,15 @@ from app.config import get_settings
 from app.signals.regime import Regime, RegimeSnapshot, setup_allowed_in_regime
 from app.signals.schemas import SetupResult
 
-MIN_RR_SCALP = 2.0
+MIN_RR_SCALP = 3.0
 
 # Permanently blocked — proven poor performers in live tracking
 PERMANENTLY_DISABLED_SETUPS = frozenset({
     "fvg_retest",
     "orb_breakout",
-    "structure_reversal",
-    "fibonacci_retrace",
 })
 
-# Only these fire unless auto-disabled by analytics
-# Best scalp setups for 24h movers (fast in/out on 1m/5m)
+# Best scalp setups — highlighted when HIGH priority
 TOP_SETUPS = frozenset({
     "order_flow",
     "liquidity_sweep",
@@ -23,6 +20,7 @@ TOP_SETUPS = frozenset({
     "volume_profile",
     "ifvg_reversal",
 })
+# All active strategy types — emit NORMAL signals when setup fires
 ACTIVE_SETUPS = frozenset({
     "order_flow",
     "liquidity_sweep",
@@ -31,6 +29,9 @@ ACTIVE_SETUPS = frozenset({
     "ifvg_reversal",
     "structure_fib_sweep",
     "amd_model",
+    "supply_demand",
+    "fibonacci_retrace",
+    "structure_reversal",
 })
 
 STRUCTURE_SETUPS = frozenset({
@@ -178,7 +179,11 @@ def evaluate_trade_decision(
         }
 
     if result.direction and regime.trend_direction != "neutral":
-        if setup_name not in TOP_SETUPS and not _direction_matches_trend(result.direction, regime.trend_direction):
+        if (
+            setup_name not in TOP_SETUPS
+            and confidence < settings.normal_min_confidence + 8
+            and not _direction_matches_trend(result.direction, regime.trend_direction)
+        ):
             return {
                 "trade_decision": "NO_TRADE",
                 "can_take": False,
@@ -187,15 +192,16 @@ def evaluate_trade_decision(
             }
 
     if regime.regime == Regime.VOLATILE and category == "alt":
-        return {
-            "trade_decision": "NO_TRADE",
-            "can_take": False,
-            "take_confidence": confidence,
-            "decision_reason": "Volatile chop — skip meme/alt setups",
-        }
+        if confidence < settings.normal_min_confidence:
+            return {
+                "trade_decision": "NO_TRADE",
+                "can_take": False,
+                "take_confidence": confidence,
+                "decision_reason": "Volatile chop — low confidence alt setup",
+            }
 
     if setup_name in TREND_FOLLOW_SETUPS and result.direction:
-        if not _direction_matches_trend(result.direction, regime.trend_direction):
+        if not _direction_matches_trend(result.direction, regime.trend_direction) and confidence < settings.scalp_min_confidence:
             return {
                 "trade_decision": "NO_TRADE",
                 "can_take": False,
@@ -203,17 +209,19 @@ def evaluate_trade_decision(
                 "decision_reason": f"{result.direction} opposes {regime.trend_direction} structure",
             }
 
-    if rr < min_rr:
+    normal_rr = settings.normal_min_rr
+    if rr < normal_rr:
         return {
             "trade_decision": "NO_TRADE",
             "can_take": False,
             "take_confidence": confidence,
             "decision_reason": (
-                f"R:R {rr:.2f} below minimum {min_rr} "
+                f"R:R {rr:.2f} below minimum {normal_rr} "
                 f"(need ₹{settings.target_profit_inr_min:.0f}+ at T1 on ₹{settings.risk_per_trade_inr:.0f} risk)"
             ),
         }
 
+    min_conf = settings.mover_min_confidence if category in ("meme", "mover") else settings.normal_min_confidence
     if confidence < min_conf:
         return {
             "trade_decision": "NO_TRADE",
@@ -223,10 +231,12 @@ def evaluate_trade_decision(
         }
 
     tier = "TOP" if setup_name in TOP_SETUPS else "STD"
+    signal_grade = "A+" if rr >= min_rr and confidence >= settings.scalp_min_confidence else "A"
     return {
         "trade_decision": "TAKE",
         "can_take": True,
         "take_confidence": confidence,
         "strategy_tier": tier,
+        "signal_grade": signal_grade,
         "decision_reason": f"{setup_name} — {result.reason} · {regime.summary}",
     }

@@ -42,7 +42,7 @@ def get_trading_settings():
         "trading_style": s.trading_style,
         "why_this_trade": (
             f"Scalp mode: top {s.top_mover_scan_count} Binance 24h % movers only. "
-            f"Risk ₹{s.risk_per_trade_inr:.0f} · bank ₹{s.scalp_target_inr:.0f}+ per win (1:2). "
+            f"Risk ₹{s.risk_per_trade_inr:.0f} · bank ₹{s.scalp_target_inr:.0f}+ per win (1:3). "
             f"Best setups: Order Flow, Liquidity Sweep, VWAP, Volume Profile. "
             f"Auto bank at ₹{s.take_profit_inr:.0f}+ live PnL."
         ),
