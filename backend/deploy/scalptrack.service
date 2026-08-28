@@ -1,0 +1,15 @@
+[Unit]
+Description=ScalpTrack FastAPI Backend
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/scalptrack/backend
+Environment=PATH=/opt/scalptrack/backend/.venv/bin
+ExecStart=/opt/scalptrack/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
