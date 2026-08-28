@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: #070B12; overflow: hidden; touch-action: none; }
+    #wrap { width: 100%; height: 100%; position: relative; }
+    #chart { width: 100%; height: 100%; }
+    #badge {
+      position: absolute; top: 8px; left: 10px; z-index: 5;
+      font: 700 11px Roboto, sans-serif; color: #FFD54F;
+      background: rgba(7, 11, 18, 0.82); padding: 4px 8px; border-radius: 4px;
+      border: 1px solid #2A3544; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="badge"></div>
+    <div id="chart"></div>
+  </div>
+  <script>
+    const COLORS = {
+      bg: '#070B12',
+      grid: '#1A2433',
+      border: '#2A3544',
+      text: '#8B9CB3',
+      up: '#00E676',
+      down: '#FF5252',
+      entry: '#00D4AA',
+      sl: '#FF5252',
+      target: '#00E676',
+      support: '#00E676',
+      resistance: '#FF5252',
+      strategy: '#4DA3FF',
+      gold: '#FFD54F',
+    };
+
+    const wrap = document.getElementById('wrap');
+    const el = document.getElementById('chart');
+    const badge = document.getElementById('badge');
+
+    const chart = LightweightCharts.createChart(el, {
+      layout: {
+        background: { type: 'solid', color: COLORS.bg },
+        textColor: COLORS.text,
+        fontFamily: 'Roboto, sans-serif',
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: COLORS.grid },
+        horzLines: { color: COLORS.grid },
+      },
+      rightPriceScale: {
+        borderColor: COLORS.border,
+        scaleMargins: { top: 0.08, bottom: 0.12 },
+      },
+      timeScale: {
+        borderColor: COLORS.border,
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 8,
+        barSpacing: 8,
+        fixLeftEdge: false,
+        lockVisibleTimeRangeOnResize: false,
+      },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal,
+        vertLine: { color: '#4DA3FF55', width: 1, style: LightweightCharts.LineStyle.Dashed },
+        horzLine: { color: '#FFD54F88', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: COLORS.gold },
+      },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+    });
+
+    const series = chart.addCandlestickSeries({
+      upColor: COLORS.up,
+      downColor: COLORS.down,
+      borderVisible: false,
+      wickUpColor: COLORS.up,
+      wickDownColor: COLORS.down,
+      priceLineVisible: true,
+      lastValueVisible: true,
+    });
+
+    let priceLines = [];
+
+    function clearLines() {
+      priceLines.forEach((l) => series.removePriceLine(l));
+      priceLines = [];
+    }
+
+    function addLine(price, color, title, dashed) {
+      if (!price || price <= 0) return;
+      const line = series.createPriceLine({
+        price,
+        color,
+        lineWidth: dashed ? 1 : 2,
+        lineStyle: dashed ? LightweightCharts.LineStyle.Dashed : LightweightCharts.LineStyle.Solid,
+        axisLabelVisible: true,
+        title,
+      });
+      priceLines.push(line);
+    }
+
+    function toTime(ts) {
+      const ms = Number(ts);
+      if (!ms) return null;
+      return Math.floor(ms / 1000);
+    }
+
+    window.updateChart = function (payload) {
+      try {
+        const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        const rows = (data.candles || [])
+          .map((c) => {
+            const t = toTime(c.timestamp ?? c.time ?? c.open_time);
+            if (!t) return null;
+            return {
+              time: t,
+              open: Number(c.open),
+              high: Number(c.high),
+              low: Number(c.low),
+              close: Number(c.close),
+            };
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.time - b.time);
+
+        const deduped = [];
+        let lastT = null;
+        for (const r of rows) {
+          if (r.time === lastT) deduped[deduped.length - 1] = r;
+          else deduped.push(r);
+          lastT = r.time;
+        }
+
+        series.setData(deduped);
+        clearLines();
+
+        const lv = data.levels || {};
+        addLine(lv.support, COLORS.support, 'Support', false);
+        addLine(lv.resistance, COLORS.resistance, 'Resistance', false);
+        addLine(lv.strategyLine, COLORS.strategy, 'Strategy', true);
+        addLine(lv.entry, COLORS.entry, 'Entry', true);
+        addLine(lv.stopLoss, COLORS.sl, 'SL', false);
+        addLine(lv.target, COLORS.target, 'T1', true);
+
+        if (data.prediction === 'bullish') badge.textContent = '↑ BULLISH';
+        else if (data.prediction === 'bearish') badge.textContent = '↓ BEARISH';
+        else badge.textContent = data.interval ? data.interval.toUpperCase() : '';
+
+        chart.timeScale().fitContent();
+      } catch (e) {
+        console.error('updateChart', e);
+      }
+    };
+
+    function resize() {
+      const rect = wrap.getBoundingClientRect();
+      chart.applyOptions({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
+    }
+
+    new ResizeObserver(resize).observe(wrap);
+    resize();
+
+    if (window.ChartReady) {
+      ChartReady.postMessage('ready');
+    }
+  </script>
+</body>
+</html>
