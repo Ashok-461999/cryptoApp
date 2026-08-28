@@ -5,7 +5,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import get_settings
-from app.services.crypto_watchlist import refresh_watchlist
+from app.services.crypto_watchlist import refresh_top_movers, refresh_watchlist
 from app.services.signal_tracker import expire_stale_open_trades, reconcile_open_trades
 from app.services.trade_analytics import purge_old_trades, rebuild_daily_snapshot
 from app.signals.crypto_scanner import crypto_scanner
@@ -62,6 +62,14 @@ def _snapshot_yesterday():
         logger.exception("Daily snapshot failed")
 
 
+def _run_movers_refresh():
+    try:
+        movers = refresh_top_movers(force=True)
+        logger.info("Top movers refreshed — %d volatile coins (3h cycle)", len(movers))
+    except Exception:
+        logger.exception("Top movers refresh failed")
+
+
 def start_scheduler() -> None:
     global _scheduler
     settings = get_settings()
@@ -71,6 +79,12 @@ def start_scheduler() -> None:
         _run_watchlist_refresh,
         CronTrigger(hour=0, minute=0, timezone="UTC"),
         id="watchlist_refresh",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _run_movers_refresh,
+        IntervalTrigger(hours=settings.mover_refresh_hours),
+        id="movers_refresh",
         replace_existing=True,
     )
     _scheduler.add_job(
@@ -109,6 +123,7 @@ def start_scheduler() -> None:
 
     # Initial load in background thread so startup isn't blocked
     import threading
+    threading.Thread(target=_run_movers_refresh, daemon=True).start()
     threading.Thread(target=_run_watchlist_refresh, daemon=True).start()
     threading.Thread(target=_run_scan, daemon=True).start()
 

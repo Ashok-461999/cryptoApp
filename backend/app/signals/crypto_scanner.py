@@ -39,6 +39,7 @@ class CryptoScanner:
         self._take_count_today: int = 0
         self._emitted_today: set[str] = set()
         self._skipped_today: set[str] = set()
+        self._high_priority_emitted_today: int = 0
         self._last_take_at: dict[str, datetime] = {}
         self._last_scan_total: int = 0
         self._trending_mover_pairs: set[str] = set()
@@ -60,6 +61,7 @@ class CryptoScanner:
 
     def _sort_key(self, s: dict) -> tuple:
         settings = get_settings()
+        high_first = 0 if s.get("priority_tier") == "HIGH" else 1
         setup_order = SETUP_PRIORITY.get(s.get("setup", ""), 9)
         mover_boost = 30 if s.get("pair") in self._trending_mover_pairs else 0
         vwap_vp_boost = 15 if s.get("setup") in ("anchored_vwap", "volume_profile", "order_flow", "liquidity_sweep") else 0
@@ -69,6 +71,7 @@ class CryptoScanner:
         major_boost = 10 if s.get("category") == "major" else 0
         cat_order = _CATEGORY_ORDER.get(s.get("category", "alt"), 2)
         return (
+            high_first,
             setup_order,
             cat_order,
             -(s.get("confidence", 0) + meme_boost + mover_boost + vwap_vp_boost + notify_boost + top_boost + major_boost),
@@ -78,14 +81,46 @@ class CryptoScanner:
         )
 
     def _refresh_take_count(self) -> None:
-        from app.services.signal_tracker import count_open_signals_today
-
         today = self._utc_today()
         if today != self._take_count_date:
             self._take_count_date = today
             self._emitted_today = set()
             self._skipped_today = set()
-        self._take_count_today = count_open_signals_today()
+            self._high_priority_emitted_today = 0
+        self._take_count_today = len(self._emitted_today)
+
+    def _qualifies_high_priority(self, signal: dict, settings) -> bool:
+        return (
+            signal.get("confidence", 0) >= settings.high_priority_min_confidence
+            and signal.get("risk_reward", 0) >= settings.high_priority_min_rr
+            and (
+                signal.get("strategy_tier") == "TOP"
+                or signal.get("notify")
+                or signal.get("setup") in TOP_SETUPS
+            )
+        )
+
+    def _priority_label(self, signal: dict) -> str:
+        conf = signal.get("confidence", 0)
+        if conf >= 90:
+            return "MAX WIN"
+        if conf >= 85 and signal.get("notify"):
+            return "DEF BUY"
+        return "A+ 1:2"
+
+    def _assign_priority(self, signal: dict, settings, high_slots_left: int) -> tuple[dict, int]:
+        """Return signal with priority fields and updated high_slots_left."""
+        if self._qualifies_high_priority(signal, settings) and high_slots_left > 0:
+            signal["priority_tier"] = "HIGH"
+            signal["priority_label"] = self._priority_label(signal)
+            return signal, high_slots_left - 1
+        signal["priority_tier"] = "NORMAL"
+        signal["priority_label"] = signal.get("rr_label", "")
+        return signal, high_slots_left
+
+    @property
+    def high_priority_count_today(self) -> int:
+        return self._high_priority_emitted_today
 
     def _prune_stale_active(self, max_minutes: int) -> None:
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_minutes)
@@ -154,13 +189,23 @@ class CryptoScanner:
             if c.get("confidence", 0) >= settings.live_min_confidence
         ]
 
-        cap = settings.max_take_signals_per_day
-        if cap > 0:
-            remaining = max(0, cap - self._take_count_today)
-            per_scan = min(settings.max_signals_per_scan, remaining)
-            take_signals = quality[:per_scan]
-        else:
-            take_signals = quality[: settings.max_signals_per_scan]
+        remaining_total = (
+            max(0, settings.max_take_signals_per_day - len(self._emitted_today))
+            if settings.max_take_signals_per_day > 0
+            else settings.max_signals_per_scan
+        )
+        per_scan = min(settings.max_signals_per_scan, remaining_total)
+
+        high_slots = max(
+            0,
+            settings.max_high_priority_signals_per_day - self._high_priority_emitted_today,
+        )
+        take_signals: list[dict] = []
+        for sig in quality:
+            if len(take_signals) >= per_scan:
+                break
+            sig, high_slots = self._assign_priority(sig, settings, high_slots)
+            take_signals.append(sig)
 
         if take_signals:
             by_key = {self._signal_key(s): s for s in self._active_signals}
@@ -179,6 +224,8 @@ class CryptoScanner:
             if key not in self._emitted_today:
                 self._emitted_today.add(key)
                 self._take_count_today += 1
+                if sig.get("priority_tier") == "HIGH":
+                    self._high_priority_emitted_today += 1
             self._last_take_at[key] = datetime.now(timezone.utc)
             for cb in self._subscribers:
                 try:

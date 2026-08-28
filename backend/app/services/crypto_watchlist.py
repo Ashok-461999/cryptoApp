@@ -20,6 +20,8 @@ MEME_KEYWORDS = (
     "MEW", "CHILLGUY", "FARTCOIN", "AI16Z", "GRIFFAIN", "ZEREBRO", "ACT", "HIPPO",
     "MUBARAK", "TST", "BAN", "ARC", "VINE", "PIPPIN", "SWARMS", "GIGA", "MELANIA",
     "ANIME", "VIRTUAL", "AIXBT", "KOMA", "DEGEN", "BABYDOGE", "CHEEMS", "SUNDOG",
+    "HEMI", "LIGHT", "MAGMA", "LAB", "CHIP", "EDEN", "UB", "MANTRA", "LOBSTER",
+    "1000PEPE", "1000BONK", "1000FLOKI", "1000SHIB", "BABYDOGE", "SUNDOG", "HIPPO",
 )
 
 
@@ -67,6 +69,105 @@ class WatchlistState:
 
 
 _watchlist = WatchlistState()
+_mover_cache: list[WatchlistSymbol] = []
+_mover_cache_at: datetime | None = None
+
+
+def get_movers_cache_meta() -> dict:
+    return {
+        "refreshed_at": _mover_cache_at.isoformat() if _mover_cache_at else "",
+        "count": len(_mover_cache),
+        "next_refresh_hours": get_settings().mover_refresh_hours,
+    }
+
+
+def _volatility_score(sym: WatchlistSymbol) -> float:
+    """|24h %| × volume weight — meme/mover boost for scalp profit."""
+    move = sym.abs_change_pct_24h
+    vol_w = 1.0 + min(sym.volume_24h_usdt / 40_000_000.0, 2.5)
+    cat_boost = 1.25 if sym.category == "meme" else (1.1 if sym.category == "mover" else 1.0)
+    return move * vol_w * cat_boost
+
+
+def _fetch_fresh_movers(cap: int) -> list[WatchlistSymbol]:
+    settings = get_settings()
+    min_vol = settings.mover_min_volume_usdt
+    min_move = settings.mover_min_change_pct
+    max_spread = settings.max_spread_pct
+
+    try:
+        all_symbols = set(_fetch_perpetual_symbols())
+        tickers = binance_data.get_futures_ticker_24hr()
+        spreads = binance_data.get_all_book_tickers()
+    except Exception:
+        logger.exception("Top 24h movers fetch failed")
+        return []
+
+    movers: list[WatchlistSymbol] = []
+    for sym, t in (tickers.items() if isinstance(tickers, dict) else []):
+        if sym not in all_symbols or not sym.endswith("USDT"):
+            continue
+        change = float(t.get("priceChangePercent") or 0)
+        abs_change = abs(change)
+        vol = float(t.get("quoteVolume") or 0)
+        if vol < min_vol:
+            continue
+        spread = spreads.get(sym, 0.5)
+        if spread > max_spread * 1.5:
+            continue
+        base = sym.replace("USDT", "")
+        tier = classify_tier(sym)
+        is_meme = _is_meme_base(base, tier)
+        movers.append(WatchlistSymbol(
+            symbol=sym, pair=sym, base=base, name=base, tier=tier,
+            volume_24h_usdt=vol, spread_pct=spread, status="TRADING",
+            category="meme" if is_meme else "mover",
+            last_price=float(t.get("lastPrice") or 0),
+            change_pct_24h=change,
+            abs_change_pct_24h=abs_change,
+            high_24h=float(t.get("highPrice") or 0),
+            low_24h=float(t.get("lowPrice") or 0),
+        ))
+
+    movers.sort(key=_volatility_score, reverse=True)
+    # Always top N by volatility — matches Binance Markets 24h chg% leaders
+    top = movers[:cap]
+    if len(top) < settings.top_mover_scan_min:
+        fallback = sorted(movers, key=lambda s: s.abs_change_pct_24h, reverse=True)
+        top = fallback[: max(settings.top_mover_scan_min, min(cap, len(fallback)))]
+    return [s for s in top if s.abs_change_pct_24h >= min_move] or top[:cap]
+
+
+def refresh_top_movers(force: bool = False) -> list[WatchlistSymbol]:
+    """Re-fetch Binance futures 24h % leaders (every 3h by scheduler)."""
+    global _mover_cache, _mover_cache_at
+    settings = get_settings()
+    cap = settings.top_mover_scan_count
+    now = datetime.now(timezone.utc)
+    ttl = settings.mover_refresh_hours * 3600
+
+    if not force and _mover_cache and _mover_cache_at:
+        if (now - _mover_cache_at).total_seconds() < ttl:
+            return _mover_cache
+
+    fresh = _fetch_fresh_movers(cap)
+    if fresh:
+        _mover_cache = fresh
+        _mover_cache_at = now
+        names = ", ".join(f"{s.base}({s.change_pct_24h:+.1f}%)" for s in fresh[:8])
+        logger.info(
+            "Top %d volatile movers refreshed (3h cycle): %s …",
+            len(fresh), names,
+        )
+    return _mover_cache
+
+
+def get_top_24h_movers(limit: int | None = None) -> list[WatchlistSymbol]:
+    """Cached top 10–15 Binance USD-M perpetuals by 24h volatility (Markets tab)."""
+    settings = get_settings()
+    cap = limit or settings.top_mover_scan_count
+    movers = refresh_top_movers()
+    return movers[:cap] if movers else _fetch_fresh_movers(cap)
 
 
 def get_watchlist() -> WatchlistState:
@@ -109,55 +210,8 @@ def _trending_score(sym: WatchlistSymbol) -> float:
     return vol * (1.0 + move / 2.5) * (1.0 + min(move, 25) / 25.0)
 
 
-def get_top_24h_movers(limit: int | None = None) -> list[WatchlistSymbol]:
-    """Top Binance USD-M perpetuals by |24h change %| — same as Markets → 24h chg% sort."""
-    settings = get_settings()
-    cap = limit or settings.top_mover_scan_count
-    min_vol = settings.mover_min_volume_usdt
-    min_move = settings.mover_min_change_pct
-    max_spread = settings.max_spread_pct
-
-    try:
-        all_symbols = set(_fetch_perpetual_symbols())
-        tickers = binance_data.get_futures_ticker_24hr()
-        spreads = binance_data.get_all_book_tickers()
-    except Exception:
-        logger.exception("Top 24h movers fetch failed")
-        return []
-
-    movers: list[WatchlistSymbol] = []
-    for sym, t in (tickers.items() if isinstance(tickers, dict) else []):
-        if sym not in all_symbols or not sym.endswith("USDT"):
-            continue
-        change = float(t.get("priceChangePercent") or 0)
-        abs_change = abs(change)
-        if abs_change < min_move:
-            continue
-        vol = float(t.get("quoteVolume") or 0)
-        if vol < min_vol:
-            continue
-        spread = spreads.get(sym, 0.5)
-        if spread > max_spread * 1.5:
-            continue
-        base = sym.replace("USDT", "")
-        tier = classify_tier(sym)
-        movers.append(WatchlistSymbol(
-            symbol=sym, pair=sym, base=base, name=base, tier=tier,
-            volume_24h_usdt=vol, spread_pct=spread, status="TRADING",
-            category="mover" if not _is_meme_base(base, tier) else "meme",
-            last_price=float(t.get("lastPrice") or 0),
-            change_pct_24h=change,
-            abs_change_pct_24h=abs_change,
-            high_24h=float(t.get("highPrice") or 0),
-            low_24h=float(t.get("lowPrice") or 0),
-        ))
-
-    movers.sort(key=lambda s: (s.abs_change_pct_24h, s.volume_24h_usdt), reverse=True)
-    return movers[:cap]
-
-
 def get_top_trending_memes(limit: int | None = None) -> list[WatchlistSymbol]:
-    """Legacy alias — now returns top 24h movers (meme keyword filter removed)."""
+    """Legacy alias — top volatile meme/movers from 3h refresh cache."""
     return get_top_24h_movers(limit)
 
 

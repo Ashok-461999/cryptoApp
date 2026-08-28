@@ -34,11 +34,16 @@ class Settings(BaseSettings):
     database_url: str = ""
     sqlite_path: str = "./data/cryptoapp.db"
 
-    # Signal limits — no daily cap; scan top movers only
-    max_take_signals_per_day: int = 0  # 0 = unlimited
-    max_signals_per_scan: int = 8
+    # Signal limits — 60–70/day total, 40 highlighted HIGH priority
+    max_take_signals_per_day: int = 70
+    max_high_priority_signals_per_day: int = 40
+    max_signals_per_scan: int = 10
+    high_priority_min_confidence: int = 85
+    high_priority_min_rr: float = 2.0
     history_retention_days: int = 7
-    top_mover_scan_count: int = 15  # Binance futures 24h % movers (like Markets tab)
+    top_mover_scan_count: int = 15  # top 10–15 Binance 24h % movers (Markets tab)
+    top_mover_scan_min: int = 10
+    mover_refresh_hours: int = 3  # re-fetch 24h % leaders every 3 hours
     top_meme_scan_count: int = 15  # alias kept for compat
     scan_24h_movers_only: bool = True  # only trade highest 24h move % coins
     scalp_min_confidence: int = 82
@@ -50,8 +55,8 @@ class Settings(BaseSettings):
     mover_min_confidence: int = 78  # top 24h movers — slightly easier entry bar
     meme_min_confidence: int = 78
     min_win_close_inr: float = 200.0  # no WIN below ₹200 (blocks ₹3/₹10 timeout noise)
-    mover_min_volume_usdt: float = 3_000_000.0
-    mover_min_change_pct: float = 8.0  # skip dead coins — need real 24h move
+    mover_min_volume_usdt: float = 1_500_000.0  # include volatile memes like Binance Markets tab
+    mover_min_change_pct: float = 5.0  # floor only — we always take top 10–15 by |24h %|
 
     # Safety
     crypto_paper_trading: bool = False  # live signals — user chooses which to take

@@ -4,7 +4,7 @@ from app.config import get_settings
 from app.services.binance_data import binance_data
 from app.services.chart_candles import get_chart_candles
 from app.services.crypto_futures_client import futures_client
-from app.services.crypto_watchlist import get_meme_coins, get_top_24h_movers, get_watchlist, refresh_watchlist
+from app.services.crypto_watchlist import get_meme_coins, get_movers_cache_meta, get_top_24h_movers, get_watchlist, refresh_top_movers, refresh_watchlist
 from app.services.focus_tracker import get_btc_gold_tracker
 from app.services.signal_tracker import get_today_trades_map
 from app.signals.crypto_scanner import crypto_scanner
@@ -153,7 +153,7 @@ def _tracking_block() -> dict:
 def get_24h_movers(refresh: bool = False):
     """Top Binance USD-M futures by 24h change % — same as Markets tab sort."""
     if refresh:
-        refresh_watchlist()
+        refresh_top_movers(force=True)
     settings = get_settings()
     trade_map = get_today_trades_map()
     movers = []
@@ -167,13 +167,16 @@ def get_24h_movers(refresh: bool = False):
         else:
             d["trade_status"] = None
         movers.append(d)
+    cache = get_movers_cache_meta()
     return {
         "movers": movers,
         "count": len(movers),
         "scan_only_movers": settings.scan_24h_movers_only,
         "top_count": settings.top_mover_scan_count,
+        "refreshed_at": cache.get("refreshed_at", ""),
+        "refresh_every_hours": cache.get("next_refresh_hours", settings.mover_refresh_hours),
         "exchange": "binance_futures",
-        "sort": "abs_change_pct_24h_desc",
+        "sort": "volatility_score_desc",
     }
 
 

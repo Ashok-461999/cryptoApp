@@ -16,9 +16,11 @@ def get_active_signals():
     return {
         "signals": signals,
         "total_scanned": crypto_scanner._last_scan_total,
-        "take_count_today": count_open_signals_today(),
+        "take_count_today": count_signals_today(),
         "user_takes_today": count_user_takes_today(),
         "take_cap_today": settings.max_take_signals_per_day if settings.max_take_signals_per_day > 0 else "unlimited",
+        "high_priority_count_today": crypto_scanner.high_priority_count_today,
+        "high_priority_cap_today": settings.max_high_priority_signals_per_day,
         "utc_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "mode": "live",
     }
