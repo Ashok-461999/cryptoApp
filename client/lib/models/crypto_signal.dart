@@ -54,6 +54,7 @@ class CryptoSignal {
   final String chartTimeframe;
   final String entryTimeframe;
   final bool userTaken;
+  final bool executedOnExchange;
   final String refStatus;
   final double refPnlInr;
   final double livePnlInr;
@@ -111,6 +112,7 @@ class CryptoSignal {
     this.chartTimeframe = '5m',
     this.entryTimeframe = '1m',
     this.userTaken = false,
+    this.executedOnExchange = false,
     this.refStatus = 'LIVE',
     this.refPnlInr = 0,
     this.livePnlInr = 0,
@@ -172,6 +174,7 @@ class CryptoSignal {
       chartTimeframe: j['chart_timeframe'] ?? '5m',
       entryTimeframe: j['entry_timeframe'] ?? '1m',
       userTaken: j['user_taken'] == true,
+      executedOnExchange: j['executed_on_exchange'] == true,
       refStatus: j['ref_status'] ?? j['ref_outcome'] ?? 'LIVE',
       refPnlInr: d(j['ref_pnl_inr']),
       livePnlInr: d(j['live_pnl_inr']),
@@ -264,6 +267,7 @@ class CryptoSignal {
       chartTimeframe: chartTimeframe,
       entryTimeframe: entryTimeframe,
       userTaken: userTaken ?? this.userTaken,
+      executedOnExchange: executedOnExchange,
       refStatus: refStatus ?? this.refStatus,
       refPnlInr: refPnlInr ?? this.refPnlInr,
       livePnlInr: livePnlInr ?? this.livePnlInr,
