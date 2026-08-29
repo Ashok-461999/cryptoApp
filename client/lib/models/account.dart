@@ -17,6 +17,10 @@ class AccountStats {
   final List<DailyPnlRow> dailyPnl;
   final List<SetupPerformanceRow> setupPerformance;
   final bool signalsUnlimited;
+  final String pnlSource;
+  final double binanceWalletInr;
+  final double binanceTodayPnlInr;
+  final double binanceUnrealizedPnlInr;
 
   AccountStats({
     required this.startingCapitalUsdt,
@@ -35,7 +39,13 @@ class AccountStats {
     this.dailyPnl = const [],
     this.setupPerformance = const [],
     this.signalsUnlimited = true,
+    this.pnlSource = 'reference',
+    this.binanceWalletInr = 0,
+    this.binanceTodayPnlInr = 0,
+    this.binanceUnrealizedPnlInr = 0,
   });
+
+  bool get usesBinancePnl => pnlSource == 'binance';
 
   factory AccountStats.fromJson(Map<String, dynamic> j) {
     double d(dynamic v) => (v is num) ? v.toDouble() : double.tryParse('$v') ?? 0;
@@ -63,6 +73,10 @@ class AccountStats {
       dailyPnl: daily,
       setupPerformance: setups,
       signalsUnlimited: j['signals_unlimited'] == true,
+      pnlSource: j['pnl_source']?.toString() ?? 'reference',
+      binanceWalletInr: d(j['binance_wallet_inr']),
+      binanceTodayPnlInr: d(j['binance_today_pnl_inr']),
+      binanceUnrealizedPnlInr: d(j['binance_unrealized_pnl_inr']),
     );
   }
 }

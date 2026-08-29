@@ -145,15 +145,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    StatTile(label: 'CAPITAL', value: '₹${(cfg['capital_inr'] ?? 20000).toStringAsFixed(0)}'),
-                    StatTile(label: 'RISK / TRADE', value: '₹${(cfg['risk_per_trade_inr'] ?? 100).toStringAsFixed(0)}', valueColor: AppColors.loss),
+                    StatTile(label: 'BINANCE', value: '₹${(cfg['binance_equity_inr'] ?? cfg['capital_inr'] ?? 0).toStringAsFixed(0)}'),
+                    StatTile(
+                      label: 'TODAY PNL',
+                      value: '${((cfg['binance_today_pnl_inr'] ?? 0) as num) >= 0 ? '+' : ''}₹${(cfg['binance_today_pnl_inr'] ?? 0).toStringAsFixed(0)}',
+                      valueColor: ((cfg['binance_today_pnl_inr'] ?? 0) as num) >= 0 ? AppColors.profit : AppColors.loss,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    StatTile(label: 'TARGET', value: '₹${(cfg['take_profit_inr'] ?? 200).toStringAsFixed(0)}+', valueColor: AppColors.profit),
-                    StatTile(label: 'R:R', value: '1:${(cfg['min_rr'] ?? 2).toStringAsFixed(0)}'),
+                    StatTile(label: 'USDT WALLET', value: '${cfg['binance_usdt_balance'] ?? 0}'),
+                    StatTile(label: 'OPEN PNL', value: '₹${(cfg['binance_unrealized_pnl_inr'] ?? 0).toStringAsFixed(0)}'),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    StatTile(label: 'RISK / TRADE', value: '₹${(cfg['risk_per_trade_inr'] ?? 200).toStringAsFixed(0)}', valueColor: AppColors.loss),
+                    StatTile(label: 'TARGET', value: '₹${(cfg['take_profit_inr'] ?? 150).toStringAsFixed(0)}+', valueColor: AppColors.profit),
                   ],
                 ),
                 const SizedBox(height: 12),

@@ -59,6 +59,7 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
   @override
   Widget build(BuildContext context) {
     final live = ref.watch(liveSignalsProvider);
+    final trading = ref.watch(tradingSettingsProvider);
     final markets = ref.watch(marketsProvider);
     final filtered = List<CryptoSignal>.from(_applyFilter(live.signals))
       ..sort((a, b) {
@@ -123,11 +124,27 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: _DailyGoalBanner(
-                takeCount: live.takeCountToday,
-                takeCap: live.takeCapLabel,
-                totalScanned: live.totalScanned,
-                lastClosed: live.lastClosedMessage,
+              child: trading.when(
+                data: (cfg) => _DailyGoalBanner(
+                  takeCount: live.takeCountToday,
+                  takeCap: live.takeCapLabel,
+                  totalScanned: live.totalScanned,
+                  lastClosed: live.lastClosedMessage,
+                  tradingConfig: cfg,
+                ),
+                loading: () => _DailyGoalBanner(
+                  takeCount: live.takeCountToday,
+                  takeCap: live.takeCapLabel,
+                  totalScanned: live.totalScanned,
+                  lastClosed: live.lastClosedMessage,
+                ),
+                error: (_, __) => _DailyGoalBanner(
+                  takeCount: live.takeCountToday,
+                  takeCap: live.takeCapLabel,
+                  totalScanned: live.totalScanned,
+                  lastClosed: live.lastClosedMessage,
+                  serverOffline: true,
+                ),
               ),
             ),
           ),
@@ -271,26 +288,74 @@ class _DailyGoalBanner extends StatelessWidget {
   final String takeCap;
   final int totalScanned;
   final String? lastClosed;
-  const _DailyGoalBanner({required this.takeCount, required this.takeCap, required this.totalScanned, this.lastClosed});
+  final Map<String, dynamic>? tradingConfig;
+  final bool serverOffline;
+  const _DailyGoalBanner({
+    required this.takeCount,
+    required this.takeCap,
+    required this.totalScanned,
+    this.lastClosed,
+    this.tradingConfig,
+    this.serverOffline = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cfg = tradingConfig;
+    final usesBinance = cfg?['pnl_mode'] == 'binance' || cfg?['capital_source'] == 'binance';
+    final equityInr = (cfg?['binance_equity_inr'] ?? cfg?['capital_inr'] ?? 0).toString();
+    final walletUsdt = (cfg?['binance_usdt_balance'] ?? 0).toString();
+    final todayPnl = (cfg?['binance_today_pnl_inr'] ?? 0);
+    final todayPnlNum = todayPnl is num ? todayPnl.toDouble() : double.tryParse('$todayPnl') ?? 0;
+    final unrealized = (cfg?['binance_unrealized_pnl_inr'] ?? 0);
+    final unrealizedNum = unrealized is num ? unrealized.toDouble() : double.tryParse('$unrealized') ?? 0;
+    final pnlColor = todayPnlNum >= 0 ? AppColors.profit : AppColors.loss;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: serverOffline ? AppColors.loss.withValues(alpha: 0.5) : AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
             const Text('ScalpTrack Live', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.text, fontSize: 20)),
-          const SizedBox(height: 4),
-          Text(
-            '₹20,000 · ₹200 risk · buy dip / sell top · 1m scalp · max 5 min hold',
-            style: const TextStyle(fontSize: 11, color: AppColors.accent),
-          ),
+          if (serverOffline) ...[
+            const SizedBox(height: 6),
+            const Text('Server paused — tell admin to start when ready', style: TextStyle(fontSize: 11, color: AppColors.loss, fontWeight: FontWeight.w700)),
+          ] else if (usesBinance) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Binance ₹$equityInr · $walletUsdt USDT · buy dip / sell top',
+              style: const TextStyle(fontSize: 11, color: AppColors.accent),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Text(
+                  'Today PnL ',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
+                Text(
+                  '${todayPnlNum >= 0 ? '+' : ''}₹${todayPnlNum.toStringAsFixed(0)}',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: pnlColor),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Open PnL ${unrealizedNum >= 0 ? '+' : ''}₹${unrealizedNum.toStringAsFixed(0)}',
+                  style: TextStyle(fontSize: 11, color: unrealizedNum >= 0 ? AppColors.profit : AppColors.loss),
+                ),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: 4),
+            Text(
+              '₹20,000 reference · ₹200 risk · buy dip / sell top · 1m scalp',
+              style: const TextStyle(fontSize: 11, color: AppColors.accent),
+            ),
+          ],
           const SizedBox(height: 4),
           Text(
             '100–150 scalps/day · 25 fast movers · scan every 1m · 1:1 R:R',

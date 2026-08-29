@@ -37,6 +37,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final history = ref.watch(tradeHistoryProvider);
+    final trading = ref.watch(tradingSettingsProvider);
 
     return RefreshIndicator(
       color: AppColors.accent,
@@ -101,11 +102,27 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 );
               }
               if (i == 2) {
+                final binanceToday = trading.maybeWhen(
+                  data: (cfg) => cfg['binance_today_pnl_inr'],
+                  orElse: () => null,
+                );
+                final pnlSource = summary['pnl_source'] ?? (binanceToday != null ? 'binance' : 'reference');
+                final pnlToday = pnlSource == 'binance'
+                    ? (binanceToday ?? summary['binance_today_pnl_inr'] ?? summary['total_pnl_inr'] ?? 0)
+                    : (summary['total_pnl_inr'] ?? 0);
+                final pnlNum = pnlToday is num ? pnlToday.toDouble() : double.tryParse('$pnlToday') ?? 0;
+                final label = pnlSource == 'binance' ? 'Binance PnL today' : 'PnL today';
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(
-                    'PnL today ₹${(summary['total_pnl_inr'] ?? 0).toStringAsFixed(0)} · Each entry: entry, SL, exit, WIN/LOSS',
-                    style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    '$label ${pnlNum >= 0 ? '+' : ''}₹${pnlNum.toStringAsFixed(0)} · entry, SL, exit, WIN/LOSS',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: pnlSource == 'binance'
+                          ? (pnlNum >= 0 ? AppColors.profit : AppColors.loss)
+                          : AppColors.textMuted,
+                      fontWeight: pnlSource == 'binance' ? FontWeight.w700 : FontWeight.normal,
+                    ),
                   ),
                 );
               }

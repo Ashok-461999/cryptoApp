@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import logging
 import time
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_DOWN
 from typing import Any
 from urllib.parse import urlencode
@@ -94,6 +95,46 @@ class BinanceTradingClient:
             if row.get("asset") == "USDT":
                 return float(row.get("availableBalance") or 0)
         return 0.0
+
+    def get_today_realized_pnl_usdt(self) -> float:
+        start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        try:
+            rows = self._request(
+                "GET",
+                "/fapi/v1/income",
+                {
+                    "incomeType": "REALIZED_PNL",
+                    "startTime": int(start.timestamp() * 1000),
+                    "limit": 1000,
+                },
+            )
+            return sum(float(r.get("income") or 0) for r in rows)
+        except Exception:
+            logger.exception("Failed to fetch Binance today PnL")
+            return 0.0
+
+    def get_wallet_summary(self) -> dict[str, float]:
+        """Live Binance Futures wallet — balance, unrealized & today realized PnL."""
+        s = get_settings()
+        acc = self._request("GET", "/fapi/v2/account")
+        wallet = float(acc.get("totalWalletBalance") or 0)
+        unrealized = float(acc.get("totalUnrealizedProfit") or 0)
+        available = float(acc.get("availableBalance") or 0)
+        equity = float(acc.get("totalMarginBalance") or wallet)
+        today_pnl = self.get_today_realized_pnl_usdt()
+        rate = s.usdt_to_inr
+        return {
+            "wallet_usdt": round(wallet, 2),
+            "available_usdt": round(available, 2),
+            "unrealized_pnl_usdt": round(unrealized, 2),
+            "equity_usdt": round(equity, 2),
+            "today_realized_pnl_usdt": round(today_pnl, 2),
+            "wallet_inr": round(wallet * rate, 0),
+            "available_inr": round(available * rate, 0),
+            "unrealized_pnl_inr": round(unrealized * rate, 0),
+            "equity_inr": round(equity * rate, 0),
+            "today_pnl_inr": round(today_pnl * rate, 0),
+        }
 
     def get_position_amt(self, symbol: str) -> float:
         pair = normalize_pair(symbol)

@@ -26,22 +26,42 @@ class AccountScreen extends ConsumerWidget {
             const Text('Account', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.text)),
             const SizedBox(height: 4),
             Text(
-              '₹20,000 start · ${s.signalsUnlimited ? 'unlimited' : 'capped'} signals · reference PnL if all taken',
+              s.usesBinancePnl
+                  ? 'Binance Futures · live balance & PnL'
+                  : 'Reference mode · connect Binance API on server',
               style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
             ),
             const SizedBox(height: 16),
             _StatCard(
-              title: 'Equity (INR)',
+              title: s.usesBinancePnl ? 'Binance Equity (INR)' : 'Equity (INR)',
               value: '₹${NumberFormat('#,##0').format(s.equityInr)}',
-              sub: 'Started ₹${NumberFormat('#,##0').format(s.startingCapitalInr)} · PnL ₹${s.realizedPnlInr.toStringAsFixed(0)}',
-              color: s.realizedPnlInr >= 0 ? AppColors.profit : AppColors.loss,
+              sub: s.usesBinancePnl
+                  ? 'Wallet ₹${NumberFormat('#,##0').format(s.binanceWalletInr)} · Today PnL ₹${s.binanceTodayPnlInr.toStringAsFixed(0)}'
+                  : 'Started ₹${NumberFormat('#,##0').format(s.startingCapitalInr)} · PnL ₹${s.realizedPnlInr.toStringAsFixed(0)}',
+              color: (s.usesBinancePnl ? s.binanceTodayPnlInr : s.realizedPnlInr) >= 0 ? AppColors.profit : AppColors.loss,
             ),
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: _MiniStat(label: 'Realized PnL', value: '₹${s.realizedPnlInr.toStringAsFixed(0)}', color: s.realizedPnlInr >= 0 ? AppColors.profit : AppColors.loss)),
+                Expanded(
+                  child: _MiniStat(
+                    label: s.usesBinancePnl ? 'Today PnL (Binance)' : 'Realized PnL',
+                    value: '₹${(s.usesBinancePnl ? s.binanceTodayPnlInr : s.realizedPnlInr).toStringAsFixed(0)}',
+                    color: (s.usesBinancePnl ? s.binanceTodayPnlInr : s.realizedPnlInr) >= 0 ? AppColors.profit : AppColors.loss,
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _MiniStat(label: 'Drawdown', value: '${s.drawdownPct.toStringAsFixed(1)}%', color: s.drawdownPct > 5 ? AppColors.loss : AppColors.text)),
+                Expanded(
+                  child: _MiniStat(
+                    label: s.usesBinancePnl ? 'Unrealized PnL' : 'Drawdown',
+                    value: s.usesBinancePnl
+                        ? '₹${s.binanceUnrealizedPnlInr.toStringAsFixed(0)}'
+                        : '${s.drawdownPct.toStringAsFixed(1)}%',
+                    color: s.usesBinancePnl
+                        ? (s.binanceUnrealizedPnlInr >= 0 ? AppColors.profit : AppColors.loss)
+                        : (s.drawdownPct > 5 ? AppColors.loss : AppColors.text),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),

@@ -68,6 +68,8 @@ def get_signal_history(limit: int = 100):
     trades = get_trade_history(limit)
     today_trades = get_today_trades(40)
     settings = get_settings()
+    from app.services.binance_account import fetch_binance_ui
+    binance = fetch_binance_ui()
     wins = sum(1 for t in trades if (t.get("outcome") or t["status"]) == "WIN")
     losses = sum(1 for t in trades if (t.get("outcome") or t["status"]) == "LOSS")
     total_pnl_inr = sum(t["pnl_inr"] for t in trades)
@@ -105,8 +107,16 @@ def get_signal_history(limit: int = 100):
             "wins": wins,
             "losses": losses,
             "open": sum(1 for t in trades if t["status"] == "OPEN"),
-            "total_pnl_inr": round(total_pnl_inr, 0),
-            "total_pnl_usdt": round(total_pnl_inr / get_settings().usdt_to_inr, 2),
+            "total_pnl_inr": round(
+                float(binance["today_pnl_inr"]) if binance else total_pnl_inr, 0
+            ),
+            "total_pnl_usdt": round(
+                float(binance["today_realized_pnl_usdt"]) if binance else total_pnl_inr / get_settings().usdt_to_inr,
+                2,
+            ),
+            "pnl_source": "binance" if binance else "reference",
+            "binance_today_pnl_inr": float(binance["today_pnl_inr"]) if binance else 0,
+            "binance_unrealized_pnl_inr": float(binance["unrealized_pnl_inr"]) if binance else 0,
             "win_rate_pct": round(wins / (wins + losses) * 100, 1) if wins + losses else 0,
         },
     }

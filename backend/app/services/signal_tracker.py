@@ -667,6 +667,28 @@ def get_account_stats() -> dict:
         )
         today_seq = today_snap.outcome_sequence if today_snap else ""
 
+        binance = None
+        try:
+            from app.services.binance_account import fetch_binance_ui
+            binance = fetch_binance_ui()
+        except Exception:
+            binance = None
+
+        if binance:
+            equity_inr = float(binance["equity_inr"])
+            equity_usdt = float(binance["equity_usdt"])
+            starting_inr = float(binance["wallet_inr"])
+            starting_usdt = float(binance["wallet_usdt"])
+            realized_inr = float(binance["today_pnl_inr"])
+            realized_usdt = float(binance["today_realized_pnl_usdt"])
+            capital_note = "Live Binance Futures · wallet & today PnL from exchange"
+            pnl_source = "binance"
+        else:
+            equity_inr = starting_inr + realized_inr
+            equity_usdt = starting_usdt + realized_usdt
+            capital_note = "₹20,000 reference · connect Binance API for live balance"
+            pnl_source = "reference"
+
         return {
             "starting_capital_inr": starting_inr,
             "starting_capital_usdt": starting_usdt,
@@ -684,7 +706,12 @@ def get_account_stats() -> dict:
             "total_trades": total_closed + open_count,
             "risk_per_trade_inr": settings.risk_per_trade_inr,
             "currency": "INR",
-            "capital_note": "₹20,000 start · profit if you took every suggested signal",
+            "capital_note": capital_note,
+            "pnl_source": pnl_source,
+            "binance": binance,
+            "binance_today_pnl_inr": float(binance["today_pnl_inr"]) if binance else 0,
+            "binance_unrealized_pnl_inr": float(binance["unrealized_pnl_inr"]) if binance else 0,
+            "binance_wallet_inr": float(binance["wallet_inr"]) if binance else 0,
             "today_outcome_sequence": today_seq,
             "daily_pnl": get_daily_pnl_history(14),
             "setup_performance": get_setup_performance(),

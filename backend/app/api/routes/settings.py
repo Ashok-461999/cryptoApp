@@ -2,7 +2,10 @@ from fastapi import APIRouter
 
 from app.config import get_settings
 from app.db.models import database_kind
+from app.services.binance_account import fetch_binance_ui
+from app.services.binance_trading_client import binance_trading
 from app.services.signal_tracker import count_signals_today, count_user_takes_today
+from app.services.trade_executor import count_exchange_trades_today, is_auto_trade_enabled
 from app.signals.crypto_scanner import crypto_scanner
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -12,22 +15,16 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 def get_trading_settings():
     """Actual trading parameters — shown in app Settings."""
     s = get_settings()
-    from app.services.binance_trading_client import binance_trading
-    from app.services.trade_executor import count_exchange_trades_today, is_auto_trade_enabled
-
-    balance_usdt = 0.0
-    api_ok = False
-    if binance_trading.is_configured():
-        api_ok = binance_trading.ping()
-        if api_ok:
-            try:
-                balance_usdt = binance_trading.get_usdt_balance()
-            except Exception:
-                balance_usdt = 0.0
+    binance = fetch_binance_ui()
+    api_ok = binance is not None
+    balance_usdt = float(binance["wallet_usdt"]) if binance else 0.0
+    display_capital_inr = float(binance["equity_inr"]) if binance else s.crypto_capital_inr
 
     return {
         "app_name": "ScalpTrack Pro",
-        "capital_inr": s.crypto_capital_inr,
+        "capital_inr": display_capital_inr,
+        "capital_usdt": float(binance["equity_usdt"]) if binance else round(s.crypto_capital_usdt, 2),
+        "capital_source": "binance" if binance else "config",
         "risk_per_trade_inr": s.risk_per_trade_inr,
         "risk_percent": s.risk_percent,
         "target_profit_inr_min": s.target_profit_inr_min,
@@ -56,12 +53,17 @@ def get_trading_settings():
         "max_exchange_trades_per_day": s.max_exchange_trades_per_day,
         "max_exchange_open_positions": s.max_exchange_open_positions,
         "binance_futures_testnet": s.binance_futures_testnet,
-        "binance_usdt_balance": round(balance_usdt, 2),
-        "pnl_mode": "exchange" if is_auto_trade_enabled() else "reference",
+        "binance_usdt_balance": balance_usdt,
+        "binance": binance,
+        "binance_wallet_inr": float(binance["wallet_inr"]) if binance else 0,
+        "binance_equity_inr": float(binance["equity_inr"]) if binance else 0,
+        "binance_today_pnl_inr": float(binance["today_pnl_inr"]) if binance else 0,
+        "binance_unrealized_pnl_inr": float(binance["unrealized_pnl_inr"]) if binance else 0,
+        "pnl_mode": "binance" if binance else "reference",
         "pnl_mode_note": (
-            "Real Binance Futures orders — PnL is actual when auto-execute is ON"
-            if is_auto_trade_enabled()
-            else "Reference only — enable auto-execute + API keys for real trades"
+            "Live Binance Futures balance & PnL"
+            if binance
+            else "Reference only — add Binance API keys on server"
         ),
         "mode": "live",
         "database": database_kind(),
