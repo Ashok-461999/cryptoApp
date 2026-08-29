@@ -9,32 +9,32 @@ class Settings(BaseSettings):
     app_env: str = "development"
     cors_origins: str = "*"
 
-    # Pure scalp — ₹100 risk, ₹150–200 profit, high leverage
+    # Micro pure scalp — $0.22 risk, $0.25 profit, high leverage fast in/out
     crypto_capital_inr: float = 20000.0
-    risk_per_trade_usdt: float = 1.20  # ~₹100 at SL
-    risk_per_trade_usdt_max: float = 1.25  # ~₹104 cap
-    scalp_rr_min: float = 1.5  # ~₹150 on ₹100 risk
-    scalp_rr_ratio: float = 2.0  # ~₹200 on ₹100 risk (HQ)
-    take_profit_usdt: float = 1.81  # ~₹150
-    take_profit_usdt_min: float = 1.81  # ~₹150
-    take_profit_usdt_max: float = 2.41  # ~₹200
-    min_win_close_usdt: float = 1.45  # bank ~₹120+ on timeout scalp
+    risk_per_trade_usdt: float = 0.22  # ~₹18 at SL
+    risk_per_trade_usdt_max: float = 0.25  # ~₹21 cap
+    scalp_rr_min: float = 1.1  # ~$0.24 on $0.22 risk
+    scalp_rr_ratio: float = 1.25  # ~$0.28 HQ
+    take_profit_usdt: float = 0.25  # ~₹21
+    take_profit_usdt_min: float = 0.22  # ~₹18 min net
+    take_profit_usdt_max: float = 0.30  # ~₹25 HQ
+    min_win_close_usdt: float = 0.15  # bank ~₹12+ on timeout scalp
     binance_taker_fee_pct: float = 0.04
-    slippage_pct: float = 0.12
-    fee_buffer_usdt: float = 0.02
-    max_notional_usdt_small_wallet: float = 120.0  # larger scalp size at high leverage
+    slippage_pct: float = 0.10
+    fee_buffer_usdt: float = 0.01
+    max_notional_usdt_small_wallet: float = 70.0  # tight size — fees stay small
     small_wallet_threshold_usdt: float = 80.0
-    bracket_min_distance_pct: float = 0.15
-    min_net_profit_to_fee_ratio: float = 1.0
-    max_deploy_pct: float = 45.0
+    bracket_min_distance_pct: float = 0.12
+    min_net_profit_to_fee_ratio: float = 1.5
+    max_deploy_pct: float = 40.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"
-    min_rr_for_take: float = 1.5
-    normal_min_rr: float = 1.0
-    leverage_min: int = 20
-    leverage_max: int = 25
-    leverage_hq_min: int = 25
-    leverage_hq_max: int = 30
+    min_rr_for_take: float = 1.0
+    normal_min_rr: float = 0.9
+    leverage_min: int = 25
+    leverage_max: int = 35
+    leverage_hq_min: int = 30
+    leverage_hq_max: int = 40
     high_quality_min_confidence: int = 80
     elite_min_confidence: int = 90
 
@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     normal_min_confidence: int = 48  # more 1m dip/top signals
     notify_min_confidence: int = 70
     signal_cooldown_minutes: int = 1  # fast re-entry for high-frequency scalp
-    scalp_holding_minutes: int = 3  # in-out within 3 min
+    scalp_holding_minutes: int = 2  # fast in-out within 2 min
     prioritize_meme_coins: bool = True
     mover_min_confidence: int = 48  # top 24h movers
     meme_min_confidence: int = 48
@@ -128,7 +128,7 @@ class Settings(BaseSettings):
     auto_execute_trades: bool = False
     auto_execute_min_confidence: int = 72
     max_exchange_trades_per_day: int = 150
-    max_exchange_open_positions: int = 2
+    max_exchange_open_positions: int = 1
     trading_paused_default: bool = True
 
     @property
