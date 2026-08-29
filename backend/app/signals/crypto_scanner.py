@@ -229,6 +229,17 @@ class CryptoScanner:
                 self._emitted_today.add(f"{key}:{self._take_count_today}")
                 if sig.get("priority_tier") == "HIGH":
                     self._high_priority_emitted_today += 1
+                try:
+                    from app.services.trade_executor import execute_signal, is_auto_trade_enabled
+
+                    if is_auto_trade_enabled():
+                        result = execute_signal(sig, trade_id)
+                        sig["exchange_execute"] = result
+                        if result.get("ok"):
+                            sig["user_taken"] = True
+                            sig["executed_on_exchange"] = True
+                except Exception:
+                    logger.exception("Auto-execute failed for %s", key)
             self._last_take_at[key] = datetime.now(timezone.utc)
             for cb in self._subscribers:
                 try:
@@ -266,6 +277,14 @@ class CryptoScanner:
             return {"ok": False, "error": "Could not start tracking this signal"}
 
         mark_user_taken(trade_id)
+
+        try:
+            from app.services.trade_executor import execute_signal, is_auto_trade_enabled
+
+            if is_auto_trade_enabled() or payload.get("force_exchange"):
+                execute_signal(payload, trade_id, force=True)
+        except Exception:
+            logger.exception("Exchange execute on take failed")
 
         for sig in self._active_signals:
             if (

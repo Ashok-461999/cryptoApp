@@ -20,6 +20,11 @@ def _after_close(t: SignalTrade) -> None:
         on_trade_closed(t)
     except Exception:
         logger.exception("Analytics after close failed")
+    try:
+        from app.services.trade_executor import on_trade_closed as sync_exchange_close
+        sync_exchange_close(t.id, t.close_reason or "")
+    except Exception:
+        logger.exception("Exchange sync close failed")
 
 
 def _round_price(price: float | None) -> float | None:

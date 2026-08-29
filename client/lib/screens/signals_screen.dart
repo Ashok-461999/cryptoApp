@@ -374,7 +374,14 @@ class _CryptoSignalCardState extends ConsumerState<_CryptoSignalCard> {
       setState(() => _acting = false);
       if (ok) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Tracking ${widget.signal.symbol} — execute on Binance'), backgroundColor: AppColors.profit),
+          SnackBar(
+            content: Text(
+              widget.signal.executedOnExchange
+                  ? 'Order placed on Binance Futures'
+                  : 'Tracking ${widget.signal.symbol} — enable auto-execute on server for Binance orders',
+            ),
+            backgroundColor: AppColors.profit,
+          ),
         );
       }
     }

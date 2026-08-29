@@ -80,6 +80,15 @@ class Settings(BaseSettings):
     binance_futures_base_url: str = "https://fapi.binance.com"
     binance_fstream_ws_url: str = "wss://fstream.binance.com"
 
+    # Binance Futures auto-execution (API keys on server only — never in the app)
+    binance_api_key: str = ""
+    binance_api_secret: str = ""
+    binance_futures_testnet: bool = False
+    auto_execute_trades: bool = False
+    auto_execute_min_confidence: int = 55
+    max_exchange_trades_per_day: int = 150
+    max_exchange_open_positions: int = 8
+
     @property
     def cors_origin_list(self) -> list[str]:
         if self.cors_origins.strip() == "*":

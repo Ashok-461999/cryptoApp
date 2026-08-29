@@ -164,6 +164,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ),
                 const SizedBox(height: 14),
+                if (cfg['auto_execute_trades'] == true) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.profit.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.profit.withValues(alpha: 0.4)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('AUTO-TRADE ON', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.profit)),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Binance Futures · ${cfg['exchange_trades_today'] ?? 0}/${cfg['max_exchange_trades_per_day'] ?? 150} today · '
+                          'USDT ${(cfg['binance_usdt_balance'] ?? 0).toString()}',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                        ),
+                        Text(
+                          cfg['pnl_mode_note'] ?? 'Real orders on Binance',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.4),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ] else if (cfg['auto_execute_configured'] == true) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.warn.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'API keys configured — set AUTO_EXECUTE_TRADES=true on server to auto-place orders',
+                      style: TextStyle(fontSize: 11, color: AppColors.warn),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ] else ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.loss.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'Reference PnL only — add Binance API keys on server for real auto-trading',
+                      style: TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.4),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
