@@ -19,6 +19,7 @@ from app.services.binance_data import binance_data, normalize_pair
 logger = logging.getLogger(__name__)
 
 _symbol_rules: dict[str, dict[str, float]] = {}
+_max_leverage_cache: dict[str, int] = {}
 
 
 class BinanceTradingError(Exception):
@@ -30,6 +31,7 @@ class BinanceTradingError(Exception):
 class BinanceTradingClient:
     def __init__(self) -> None:
         self._client = httpx.Client(timeout=20.0)
+        self._hedge_mode: bool | None = None
 
     def is_configured(self) -> bool:
         s = get_settings()
@@ -136,6 +138,38 @@ class BinanceTradingClient:
             "today_pnl_inr": round(today_pnl * rate, 0),
         }
 
+    def is_hedge_mode(self) -> bool:
+        if self._hedge_mode is not None:
+            return self._hedge_mode
+        try:
+            data = self._request("GET", "/fapi/v1/positionSide/dual")
+            self._hedge_mode = bool(data.get("dualSidePosition"))
+        except Exception as exc:
+            logger.warning("positionSide/dual check failed: %s", exc)
+            self._hedge_mode = False
+        return self._hedge_mode
+
+    def ensure_one_way_mode(self) -> bool:
+        """Prefer one-way mode so orders work without positionSide."""
+        if not self.is_hedge_mode():
+            return True
+        try:
+            self._request("POST", "/fapi/v1/positionSide/dual", {"dualSidePosition": "false"})
+            self._hedge_mode = False
+            logger.info("Binance account set to one-way position mode")
+            return True
+        except BinanceTradingError as exc:
+            logger.warning("Cannot switch to one-way mode (close positions first?): %s", exc)
+            return False
+
+    def _order_params(self, base: dict[str, Any], position_side: str | None = None) -> dict[str, Any]:
+        params = dict(base)
+        if self.is_hedge_mode():
+            if not position_side:
+                raise BinanceTradingError("Hedge mode requires positionSide — close open positions or switch to one-way mode")
+            params["positionSide"] = position_side.upper()
+        return params
+
     def get_position_amt(self, symbol: str) -> float:
         pair = normalize_pair(symbol)
         rows = self._request("GET", "/fapi/v2/positionRisk", {"symbol": pair})
@@ -181,14 +215,45 @@ class BinanceTradingClient:
         rules = self._load_symbol_rules(symbol)
         return self._round_step(price, rules["tick_size"])
 
-    def set_leverage(self, symbol: str, leverage: int) -> None:
+    def get_max_leverage(self, symbol: str) -> int:
+        """Binance per-symbol max leverage from leverage brackets."""
         pair = normalize_pair(symbol)
-        lev = max(1, min(int(leverage), 125))
+        if pair in _max_leverage_cache:
+            return _max_leverage_cache[pair]
         try:
-            self._request("POST", "/fapi/v1/leverage", {"symbol": pair, "leverage": lev})
-        except BinanceTradingError as exc:
-            if exc.code not in (-4046,):
+            rows = self._request("GET", "/fapi/v1/leverageBracket", {"symbol": pair})
+            for row in rows:
+                if row.get("symbol") != pair:
+                    continue
+                brackets = row.get("brackets") or []
+                mx = max(int(b.get("initialLeverage") or 1) for b in brackets) if brackets else 20
+                _max_leverage_cache[pair] = mx
+                return mx
+        except Exception as exc:
+            logger.warning("leverageBracket %s failed: %s", pair, exc)
+        return 20
+
+    def set_leverage(self, symbol: str, leverage: int) -> int:
+        pair = normalize_pair(symbol)
+        cap = self.get_max_leverage(pair)
+        lev = max(1, min(int(leverage), cap))
+        last_err: BinanceTradingError | None = None
+        for try_lev in range(lev, 0, -5):
+            try:
+                self._request("POST", "/fapi/v1/leverage", {"symbol": pair, "leverage": try_lev})
+                if try_lev != leverage:
+                    logger.info("Leverage capped %s: requested %sx -> %sx (max %sx)", pair, leverage, try_lev, cap)
+                return try_lev
+            except BinanceTradingError as exc:
+                if exc.code in (-4046,):
+                    return try_lev
+                last_err = exc
+                if "not valid" in str(exc).lower():
+                    continue
                 raise
+        if last_err:
+            raise last_err
+        return 1
 
     def set_isolated_margin(self, symbol: str) -> None:
         pair = normalize_pair(symbol)
@@ -198,7 +263,9 @@ class BinanceTradingClient:
             if exc.code not in (-4046,):
                 raise
 
-    def place_market_order(self, symbol: str, side: str, quantity: float) -> dict[str, Any]:
+    def place_market_order(
+        self, symbol: str, side: str, quantity: float, *, position_side: str | None = None
+    ) -> dict[str, Any]:
         pair = normalize_pair(symbol)
         qty = self.round_qty(pair, quantity)
         rules = self._load_symbol_rules(pair)
@@ -207,45 +274,60 @@ class BinanceTradingClient:
         return self._request(
             "POST",
             "/fapi/v1/order",
-            {
-                "symbol": pair,
-                "side": side.upper(),
-                "type": "MARKET",
-                "quantity": qty,
-                "newOrderRespType": "RESULT",
-            },
+            self._order_params(
+                {
+                    "symbol": pair,
+                    "side": side.upper(),
+                    "type": "MARKET",
+                    "quantity": qty,
+                    "newOrderRespType": "RESULT",
+                },
+                position_side,
+            ),
         )
 
-    def place_stop_market(self, symbol: str, side: str, stop_price: float, quantity: float) -> dict[str, Any]:
+    def place_stop_market(
+        self, symbol: str, side: str, stop_price: float, quantity: float, *, position_side: str | None = None
+    ) -> dict[str, Any]:
+        return self._place_algo_conditional(
+            symbol, side, "STOP_MARKET", stop_price, quantity, position_side=position_side
+        )
+
+    def place_take_profit_market(
+        self, symbol: str, side: str, stop_price: float, quantity: float, *, position_side: str | None = None
+    ) -> dict[str, Any]:
+        return self._place_algo_conditional(
+            symbol, side, "TAKE_PROFIT_MARKET", stop_price, quantity, position_side=position_side
+        )
+
+    def _place_algo_conditional(
+        self,
+        symbol: str,
+        side: str,
+        order_type: str,
+        trigger_price: float,
+        quantity: float,
+        *,
+        position_side: str | None = None,
+    ) -> dict[str, Any]:
+        """Binance migrated STOP/TP orders to algo service (Dec 2025)."""
         pair = normalize_pair(symbol)
         return self._request(
             "POST",
-            "/fapi/v1/order",
-            {
-                "symbol": pair,
-                "side": side.upper(),
-                "type": "STOP_MARKET",
-                "stopPrice": self.round_price(pair, stop_price),
-                "quantity": self.round_qty(pair, quantity),
-                "reduceOnly": "true",
-                "workingType": "MARK_PRICE",
-            },
-        )
-
-    def place_take_profit_market(self, symbol: str, side: str, stop_price: float, quantity: float) -> dict[str, Any]:
-        pair = normalize_pair(symbol)
-        return self._request(
-            "POST",
-            "/fapi/v1/order",
-            {
-                "symbol": pair,
-                "side": side.upper(),
-                "type": "TAKE_PROFIT_MARKET",
-                "stopPrice": self.round_price(pair, stop_price),
-                "quantity": self.round_qty(pair, quantity),
-                "reduceOnly": "true",
-                "workingType": "MARK_PRICE",
-            },
+            "/fapi/v1/algoOrder",
+            self._order_params(
+                {
+                    "algoType": "CONDITIONAL",
+                    "symbol": pair,
+                    "side": side.upper(),
+                    "type": order_type.upper(),
+                    "triggerPrice": self.round_price(pair, trigger_price),
+                    "quantity": self.round_qty(pair, quantity),
+                    "reduceOnly": "true",
+                    "workingType": "MARK_PRICE",
+                },
+                position_side,
+            ),
         )
 
     def cancel_all_orders(self, symbol: str) -> None:
@@ -254,15 +336,25 @@ class BinanceTradingClient:
             self._request("DELETE", "/fapi/v1/allOpenOrders", {"symbol": pair})
         except BinanceTradingError as exc:
             logger.warning("Cancel orders %s: %s", pair, exc)
+        try:
+            self._request("DELETE", "/fapi/v1/algoOpenOrders", {"symbol": pair})
+        except BinanceTradingError as exc:
+            logger.warning("Cancel algo orders %s: %s", pair, exc)
 
     def close_position_market(self, symbol: str) -> dict[str, Any] | None:
         pair = normalize_pair(symbol)
-        amt = self.get_position_amt(pair)
-        if abs(amt) < 1e-12:
-            return None
-        side = "SELL" if amt > 0 else "BUY"
-        qty = self.round_qty(pair, abs(amt))
-        return self.place_market_order(pair, side, qty)
+        rows = self._request("GET", "/fapi/v2/positionRisk", {"symbol": pair})
+        for row in rows:
+            if row.get("symbol") != pair:
+                continue
+            amt = float(row.get("positionAmt") or 0)
+            if abs(amt) < 1e-12:
+                continue
+            side = "SELL" if amt > 0 else "BUY"
+            pos_side = row.get("positionSide") if self.is_hedge_mode() else None
+            qty = self.round_qty(pair, abs(amt))
+            return self.place_market_order(pair, side, qty, position_side=pos_side)
+        return None
 
 
 binance_trading = BinanceTradingClient()

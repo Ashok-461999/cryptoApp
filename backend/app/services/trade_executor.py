@@ -107,23 +107,32 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
             return {"ok": True, "reason": "already executed", "duplicate": True}
 
         try:
+            binance_trading.ensure_one_way_mode()
             binance_trading.set_isolated_margin(symbol)
-            binance_trading.set_leverage(symbol, leverage)
-            entry_order = binance_trading.place_market_order(symbol, entry_side, quantity)
+            actual_lev = binance_trading.set_leverage(symbol, leverage)
+            position_side = direction if binance_trading.is_hedge_mode() else None
+            entry_order = binance_trading.place_market_order(
+                symbol, entry_side, quantity, position_side=position_side
+            )
             fill_qty = float(entry_order.get("executedQty") or quantity)
             fill_price = float(entry_order.get("avgPrice") or entry_order.get("price") or signal.get("entry_price") or 0)
 
-            sl_order = binance_trading.place_stop_market(symbol, exit_side, sl, fill_qty)
-            tp_order = binance_trading.place_take_profit_market(symbol, exit_side, tp, fill_qty)
+            sl_order = binance_trading.place_stop_market(
+                symbol, exit_side, sl, fill_qty, position_side=position_side
+            )
+            tp_order = binance_trading.place_take_profit_market(
+                symbol, exit_side, tp, fill_qty, position_side=position_side
+            )
 
             payload.update({
                 "executed_on_exchange": True,
                 "user_taken": True,
                 "binance_entry_order_id": entry_order.get("orderId"),
-                "binance_sl_order_id": sl_order.get("orderId"),
-                "binance_tp_order_id": tp_order.get("orderId"),
+                "binance_sl_order_id": sl_order.get("algoId") or sl_order.get("orderId"),
+                "binance_tp_order_id": tp_order.get("algoId") or tp_order.get("orderId"),
                 "actual_fill_price": fill_price,
                 "actual_quantity": fill_qty,
+                "actual_leverage": actual_lev,
                 "exchange_executed_at": datetime.now(timezone.utc).isoformat(),
             })
             if fill_price > 0:
@@ -141,6 +150,11 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
             _save_payload(trade, payload)
             session.commit()
             logger.exception("Exchange execute failed trade #%s", trade_id)
+            try:
+                binance_trading.cancel_all_orders(symbol)
+                binance_trading.close_position_market(symbol)
+            except Exception:
+                logger.exception("Failed to unwind position after execute error for %s", symbol)
             return {"ok": False, "reason": str(exc)}
     finally:
         session.close()
