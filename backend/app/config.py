@@ -126,7 +126,7 @@ class Settings(BaseSettings):
     binance_api_secret: str = ""
     binance_futures_testnet: bool = False
     auto_execute_trades: bool = False
-    auto_execute_min_confidence: int = 72
+    auto_execute_min_confidence: int = 78
     max_exchange_trades_per_day: int = 150
     max_exchange_open_positions: int = 1
     trading_paused_default: bool = True

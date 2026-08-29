@@ -207,6 +207,21 @@ class BinanceTradingClient:
         s = Decimal(str(step))
         return float((d / s).to_integral_value(rounding=ROUND_DOWN) * s)
 
+    @staticmethod
+    def _decimal_places(step: float) -> int:
+        if step <= 0:
+            return 8
+        text = f"{step:.12f}".rstrip("0").rstrip(".")
+        return len(text.split(".")[1]) if "." in text else 0
+
+    def _format_for_api(self, value: float, step: float) -> str:
+        """Binance rejects scientific notation and excess precision."""
+        rounded = self._round_step(value, step)
+        if rounded <= 0:
+            raise BinanceTradingError(f"Invalid API value after rounding: {value} -> {rounded}")
+        places = self._decimal_places(step)
+        return f"{rounded:.{places}f}"
+
     def round_qty(self, symbol: str, qty: float) -> float:
         rules = self._load_symbol_rules(symbol)
         return max(self._round_step(qty, rules["step_size"]), rules["min_qty"])
@@ -214,6 +229,14 @@ class BinanceTradingClient:
     def round_price(self, symbol: str, price: float) -> float:
         rules = self._load_symbol_rules(symbol)
         return self._round_step(price, rules["tick_size"])
+
+    def format_qty(self, symbol: str, qty: float) -> str:
+        rules = self._load_symbol_rules(symbol)
+        return self._format_for_api(max(qty, rules["min_qty"]), rules["step_size"])
+
+    def format_price(self, symbol: str, price: float) -> str:
+        rules = self._load_symbol_rules(symbol)
+        return self._format_for_api(price, rules["tick_size"])
 
     def adjust_bracket_prices(
         self,
@@ -341,25 +364,30 @@ class BinanceTradingClient:
         quantity: float,
         *,
         position_side: str | None = None,
+        close_position: bool = True,
     ) -> dict[str, Any]:
-        """Binance migrated STOP/TP orders to algo service (Dec 2025)."""
+        """Binance migrated STOP/TP to algo service (Dec 2025)."""
         pair = normalize_pair(symbol)
+        rules = self._load_symbol_rules(pair)
+        trig = self.format_price(pair, trigger_price)
+        params: dict[str, Any] = {
+            "algoType": "CONDITIONAL",
+            "symbol": pair,
+            "side": side.upper(),
+            "type": order_type.upper(),
+            "triggerPrice": trig,
+            "workingType": "MARK_PRICE",
+            "priceProtect": "TRUE",
+        }
+        if close_position:
+            params["closePosition"] = "true"
+        else:
+            params["quantity"] = self.format_qty(pair, quantity)
+            params["reduceOnly"] = "true"
         return self._request(
             "POST",
             "/fapi/v1/algoOrder",
-            self._order_params(
-                {
-                    "algoType": "CONDITIONAL",
-                    "symbol": pair,
-                    "side": side.upper(),
-                    "type": order_type.upper(),
-                    "triggerPrice": self.round_price(pair, trigger_price),
-                    "quantity": self.round_qty(pair, quantity),
-                    "reduceOnly": "true",
-                    "workingType": "MARK_PRICE",
-                },
-                position_side,
-            ),
+            self._order_params(params, position_side),
         )
 
     def list_open_algo_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
