@@ -9,21 +9,28 @@ class Settings(BaseSettings):
     app_env: str = "development"
     cors_origins: str = "*"
 
-    # Capital & risk — small wallet uses fixed USDT loss / profit per trade
+    # Capital & risk — scalp: ₹20–30 loss, ₹80–100 net profit (after fees)
     crypto_capital_inr: float = 20000.0
-    risk_per_trade_usdt: float = 0.6
-    risk_per_trade_usdt_max: float = 0.75
-    take_profit_usdt: float = 1.20  # ~₹100
-    take_profit_usdt_min: float = 1.0
-    take_profit_usdt_max: float = 1.25
-    min_win_close_usdt: float = 1.0
+    risk_per_trade_usdt: float = 0.30  # ~₹25
+    risk_per_trade_usdt_max: float = 0.36  # ~₹30
+    take_profit_usdt: float = 1.05  # ~₹87 net target (mid band)
+    take_profit_usdt_min: float = 0.96  # ~₹80 net
+    take_profit_usdt_max: float = 1.20  # ~₹100 net
+    min_win_close_usdt: float = 0.80  # close early once ~₹66+ net in book
+    # Binance USDT-M taker ~0.04% per side; buffer for slippage
+    binance_taker_fee_pct: float = 0.04
+    fee_buffer_usdt: float = 0.02
     max_deploy_pct: float = 40.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"
-    min_rr_for_take: float = 2.0  # high-priority notify filter
-    normal_min_rr: float = 1.0  # dip/top fires at 1:1; TP sized to $1.75 after
+    min_rr_for_take: float = 2.5  # HQ notify filter
+    normal_min_rr: float = 1.0
     leverage_min: int = 15
     leverage_max: int = 20
+    leverage_hq_min: int = 20  # confidence >= 80%
+    leverage_hq_max: int = 25  # confidence >= 90%
+    high_quality_min_confidence: int = 80
+    elite_min_confidence: int = 90
 
     @property
     def risk_per_trade_inr(self) -> float:
@@ -61,7 +68,7 @@ class Settings(BaseSettings):
     sqlite_path: str = "./data/cryptoapp.db"
 
     # Signal limits — high-frequency 1m dip/top scalp on fast movers
-    max_take_signals_per_day: int = 150
+    max_take_signals_per_day: int = 200
     max_high_priority_signals_per_day: int = 60
     max_signals_per_scan: int = 30
     high_priority_min_confidence: int = 80
@@ -77,8 +84,8 @@ class Settings(BaseSettings):
     live_min_confidence: int = 48
     normal_min_confidence: int = 48  # more 1m dip/top signals
     notify_min_confidence: int = 70
-    signal_cooldown_minutes: int = 2  # re-enter same coin after 2 min
-    scalp_holding_minutes: int = 5  # 1m scalp — exit within 5 min if no T1
+    signal_cooldown_minutes: int = 1  # fast re-entry for high-frequency scalp
+    scalp_holding_minutes: int = 3  # in-out within 3 min
     prioritize_meme_coins: bool = True
     mover_min_confidence: int = 48  # top 24h movers
     meme_min_confidence: int = 48
@@ -110,7 +117,7 @@ class Settings(BaseSettings):
     binance_futures_testnet: bool = False
     auto_execute_trades: bool = False
     auto_execute_min_confidence: int = 55
-    max_exchange_trades_per_day: int = 150
+    max_exchange_trades_per_day: int = 200
     max_exchange_open_positions: int = 2  # small wallet — max 2 trades at once
     trading_paused_default: bool = True
 

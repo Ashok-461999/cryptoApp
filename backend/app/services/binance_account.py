@@ -44,7 +44,7 @@ def get_available_usdt(settings: Settings | None = None) -> float:
 
 
 def fixed_risk_usdt(settings: Settings | None = None) -> float:
-    """Fixed max loss at SL in USDT ($0.5–$0.75 band)."""
+    """Fixed max loss at SL in USDT (~₹20–30 band, fees extra)."""
     s = settings or get_settings()
     return min(s.risk_per_trade_usdt, s.risk_per_trade_usdt_max)
 
@@ -64,11 +64,25 @@ def per_trade_deploy_pct(capital_usdt: float, settings: Settings | None = None) 
     return s.max_deploy_pct
 
 
-def min_leverage_for_capital(capital_usdt: float, settings: Settings | None = None) -> int:
+def leverage_for_confidence(confidence: int, settings: Settings | None = None) -> tuple[int, int]:
+    """Higher confidence → higher leverage band for quick scalps."""
     s = settings or get_settings()
+    if confidence >= s.elite_min_confidence:
+        return s.leverage_hq_min, s.leverage_hq_max
+    if confidence >= s.high_quality_min_confidence:
+        return s.leverage_min, s.leverage_hq_max
+    return s.leverage_min, s.leverage_max
+
+
+def min_leverage_for_capital(capital_usdt: float, confidence: int = 0, settings: Settings | None = None) -> int:
+    s = settings or get_settings()
+    if confidence > 0:
+        return leverage_for_confidence(confidence, s)[0]
     return s.leverage_min
 
 
-def max_leverage_for_capital(capital_usdt: float, settings: Settings | None = None) -> int:
+def max_leverage_for_capital(capital_usdt: float, confidence: int = 0, settings: Settings | None = None) -> int:
     s = settings or get_settings()
+    if confidence > 0:
+        return leverage_for_confidence(confidence, s)[1]
     return s.leverage_max

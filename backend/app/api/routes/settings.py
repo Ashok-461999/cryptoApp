@@ -36,8 +36,9 @@ def _trading_payload() -> dict:
         "take_profit_usdt_min": s.take_profit_usdt_min,
         "take_profit_usdt_max": s.take_profit_usdt_max,
         "target_profit_note": (
-            f"Bank ${s.take_profit_usdt_min:.1f}–${s.take_profit_usdt_max:.1f} USDT profit · "
-            f"max loss ${s.risk_per_trade_usdt:.2f}–${s.risk_per_trade_usdt_max:.2f} at SL"
+            f"Net ₹{s.target_profit_inr_min:.0f}–{s.take_profit_inr:.0f} after ~{s.binance_taker_fee_pct:.2f}%×2 fees · "
+            f"max loss ₹{s.risk_per_trade_inr:.0f}–{round(s.risk_per_trade_usdt_max * s.usdt_to_inr):.0f} at SL · "
+            f"{s.leverage_min}–{s.leverage_hq_max}x (HQ signals use higher leverage)"
         ),
         "max_signals_per_day": s.max_take_signals_per_day,
         "signals_today": count_signals_today(),
@@ -48,6 +49,10 @@ def _trading_payload() -> dict:
         "scan_24h_movers_only": s.scan_24h_movers_only,
         "leverage_min": s.leverage_min,
         "leverage_max": s.leverage_max,
+        "leverage_hq_min": s.leverage_hq_min,
+        "leverage_hq_max": s.leverage_hq_max,
+        "high_quality_min_confidence": s.high_quality_min_confidence,
+        "binance_taker_fee_pct": s.binance_taker_fee_pct,
         "notify_min_confidence": s.notify_min_confidence,
         "min_confidence_pct": s.scalp_min_confidence,
         "min_rr": s.min_rr_for_take,
@@ -81,7 +86,7 @@ def _trading_payload() -> dict:
         "why_this_trade": (
             f"1m buy-dip / sell-top on top {s.top_mover_scan_count} fast movers. "
             f"Up to {s.max_take_signals_per_day} scalps/day · scan every 1 min · max hold {s.scalp_holding_minutes} min. "
-            f"Risk ${s.risk_per_trade_usdt:.2f} max · target ${s.take_profit_usdt:.2f} profit."
+            f"Risk ₹{s.risk_per_trade_inr:.0f} max · net target ₹{s.take_profit_inr:.0f} (after fees)."
             + (
                 " AUTO-EXECUTE ON — orders placed on Binance Futures."
                 if is_auto_trade_enabled()
