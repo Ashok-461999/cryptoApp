@@ -22,7 +22,8 @@ from app.services.crypto_futures_client import futures_client
 from app.services.crypto_watchlist import WatchlistSymbol, get_scan_symbol_order, get_top_24h_movers, get_watchlist, refresh_watchlist
 from app.services.signal_tracker import enrich_live_signals, mark_user_taken, save_signal
 from app.services.trade_analytics import get_disabled_setups
-from app.services.trading_fees import estimated_entry_drag_usdt, passes_fee_gate, round_trip_fee_usdt, tp_price_from_rr
+from app.services.trading_fees import estimated_entry_drag_usdt, passes_fee_gate, round_trip_fee_usdt
+from app.signals.scalp_levels import build_scalp_targets, validate_scalp_levels
 from app.signals.indicators import atr_pct
 from app.signals.market_structure import swing_high_low
 from app.signals.momentum_scalp import SETUP_NAME as DIP_TOP_SETUP, dip_top_scalp
@@ -380,6 +381,23 @@ class CryptoScanner:
             return body > 0 and float(bar["close"]) > float(prev["high"])
         return body < 0 and float(bar["close"]) < float(prev["low"])
 
+    @staticmethod
+    def _confirm_scalp_reversal(direction: str, entry_df) -> bool:
+        """Buy dip = bounce off lows. Sell top = rejection from highs."""
+        if len(entry_df) < 2:
+            return False
+        bar = entry_df.iloc[-1]
+        o, h, l, c = float(bar["open"]), float(bar["high"]), float(bar["low"]), float(bar["close"])
+        rng = h - l
+        if rng <= 0:
+            return False
+        close_pos = (c - l) / rng
+        lower_wick = (min(o, c) - l) / rng
+        upper_wick = (h - max(o, c)) / rng
+        if direction in ("bullish", "LONG"):
+            return (c > o and close_pos >= 0.38) or lower_wick >= 0.30
+        return (c < o and close_pos <= 0.62) or upper_wick >= 0.30
+
     def _setups_for_symbol(self, sym: WatchlistSymbol, disabled_setups: set[str]):
         """Fast movers: 1m buy-dip / sell-top only."""
         if sym.category in ("meme", "mover"):
@@ -432,6 +450,14 @@ class CryptoScanner:
                     continue
 
                 direction = "LONG" if result.direction == "bullish" else "SHORT"
+                scalp_type = (result.metadata or {}).get("scalp_type", "")
+                if scalp_tight:
+                    if scalp_type == "buy_dip" and direction != "LONG":
+                        continue
+                    if scalp_type == "sell_top" and direction != "SHORT":
+                        continue
+                    if not self._confirm_scalp_reversal(result.direction or "bullish", entry_df):
+                        continue
                 if self._in_cooldown(setup_name, sym.pair, direction):
                     continue
 
@@ -458,7 +484,10 @@ class CryptoScanner:
                 risk = abs(entry - stop)
                 if risk <= 0:
                     continue
-                sign = 1 if direction == "LONG" else -1
+                if direction == "LONG" and stop >= entry:
+                    continue
+                if direction == "SHORT" and stop <= entry:
+                    continue
                 live_cap = get_live_capital_usdt(settings)
                 confidence = decision["take_confidence"]
 
@@ -489,9 +518,14 @@ class CryptoScanner:
                 rr = scalp_rr_for_confidence(confidence, settings)
                 fee_est = round_trip_fee_usdt(plan.notional_usdt, settings)
                 entry_drag = estimated_entry_drag_usdt(plan.notional_usdt, settings)
-                t1, t2, tp_gross, tp_net = tp_price_from_rr(
-                    entry, stop, sign, rr, plan.notional_usdt, settings,
+                targets = build_scalp_targets(
+                    entry, stop, direction, rr, plan.notional_usdt, settings,
                 )
+                if targets is None:
+                    continue
+                t1, t2, tp_gross, tp_net = targets
+                if not validate_scalp_levels(entry, stop, t1, direction):
+                    continue
                 if not passes_fee_gate(tp_net, plan.notional_usdt, settings):
                     continue
 
@@ -512,7 +546,7 @@ class CryptoScanner:
                 signal["estimated_fees_usdt"] = round(fee_est + entry_drag, 3)
                 signal["scalp_rr"] = rr
                 hold_m = settings.scalp_holding_minutes
-                scalp_label = "Buy dip" if result.direction == "bullish" else "Sell top"
+                scalp_label = "Buy dip (LONG)" if scalp_type == "buy_dip" else "Sell top (SHORT)"
                 signal.update({
                     "setup": setup_name,
                     "confidence": confidence,
@@ -529,6 +563,7 @@ class CryptoScanner:
                     "entry_timeframe": ENTRY_TF,
                     "validity_points": [
                         f"1m {scalp_label}: {result.reason}",
+                        f"SL {stop:.6g} · TP {t1:.6g} · {rr_label} scalp",
                         f"Entry TF: {ENTRY_TF} · max hold {hold_m} min · scan every 1m",
                         f"Market: {regime.summary} · 24h {sym.change_pct_24h:+.1f}%",
                         f"Trade decision: {decision['decision_reason']}",

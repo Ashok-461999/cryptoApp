@@ -1,4 +1,4 @@
-"""1m dip-top scalp — buy the dip, sell the top on fast-moving coins."""
+"""1m dip-top scalp — BUY the dip (long), SELL the top (short). Never chase."""
 
 from __future__ import annotations
 
@@ -9,11 +9,13 @@ from app.signals.schemas import SetupResult, T1_R
 
 SETUP_NAME = "dip_top_scalp"
 LOOKBACK = 12
-DIP_ZONE = 0.30
-TOP_ZONE = 0.70
-MIN_RANGE_PCT = 0.20
+DIP_ZONE = 0.28  # bottom 28% of range only
+TOP_ZONE = 0.72  # top 28% of range only
+MIN_RANGE_PCT = 0.22
 MIN_FAST_24H_PCT = 2.5
-MIN_WICK_RATIO = 0.30
+MIN_WICK_RATIO = 0.32
+# Reject buy when price is still at highs / sell when still at lows (anti chase)
+MIN_OPPOSITE_RANGE_PCT = 0.35  # must be 0.35%+ away from opposite end
 
 
 def _range_context(d: pd.DataFrame) -> dict | None:
@@ -51,7 +53,10 @@ def _range_context(d: pd.DataFrame) -> dict | None:
 def _buy_dip(ctx: dict, change_24h_pct: float) -> SetupResult:
     name = SETUP_NAME
     if ctx["position"] > DIP_ZONE:
-        return SetupResult(setup_name=name, fired=False, reason="not in dip zone")
+        return SetupResult(setup_name=name, fired=False, reason="not in dip zone — won't buy top")
+    dist_from_high_pct = (ctx["rolling_high"] - ctx["entry"]) / ctx["entry"] * 100
+    if dist_from_high_pct < MIN_OPPOSITE_RANGE_PCT:
+        return SetupResult(setup_name=name, fired=False, reason="too close to range high — not a dip")
     if abs(change_24h_pct) < MIN_FAST_24H_PCT:
         return SetupResult(setup_name=name, fired=False, reason="24h move too slow")
 
@@ -60,17 +65,19 @@ def _buy_dip(ctx: dict, change_24h_pct: float) -> SetupResult:
     o, h, l, c = float(bar["open"]), float(bar["high"]), float(bar["low"]), float(bar["close"])
     lower_wick = min(o, c) - l
     wick_ratio = lower_wick / ctx["full_range"]
+    close_pos = (c - l) / ctx["full_range"]
     green = c > o
-    if not green and wick_ratio < MIN_WICK_RATIO:
-        return SetupResult(setup_name=name, fired=False, reason="no dip bounce candle")
+    # Bounce off lows: green candle or hammer + close not stuck at bottom
+    if not ((green and close_pos >= 0.40) or wick_ratio >= MIN_WICK_RATIO):
+        return SetupResult(setup_name=name, fired=False, reason="no dip bounce — wait for rejection")
 
-    stop = ctx["rolling_low"] - entry * 0.0002
+    stop = min(ctx["rolling_low"], l) - entry * 0.0003
     if stop >= entry:
-        stop = entry * (1 - 0.0022)
+        stop = entry * (1 - 0.0025)
     risk = entry - stop
     if risk <= 0:
         return SetupResult(setup_name=name, fired=False, reason="invalid stop")
-    targets = [entry + risk * T1_R, entry + risk * (T1_R + 0.25)]
+    targets = [entry + risk * T1_R, entry + risk * (T1_R + 0.5)]
     dip_pct = (ctx["rolling_high"] - entry) / entry * 100
     return SetupResult(
         setup_name=name,
@@ -79,16 +86,19 @@ def _buy_dip(ctx: dict, change_24h_pct: float) -> SetupResult:
         entry=entry,
         stop_loss=stop,
         targets=targets,
-        reason=f"BUY DIP · 1m low zone · dipped {dip_pct:.2f}% · 24h {change_24h_pct:+.1f}%",
-        sl_basis="1m_dip_low",
-        metadata={"scalp_type": "buy_dip", "range_pct": ctx["range_pct"], "volume_confirmed": True},
+        reason=f"BUY DIP · long at range low ({ctx['position']*100:.0f}%) · dipped {dip_pct:.2f}%",
+        sl_basis="below_1m_swing_low",
+        metadata={"scalp_type": "buy_dip", "range_pct": ctx["range_pct"], "zone": ctx["position"]},
     )
 
 
 def _sell_top(ctx: dict, change_24h_pct: float) -> SetupResult:
     name = SETUP_NAME
     if ctx["position"] < TOP_ZONE:
-        return SetupResult(setup_name=name, fired=False, reason="not in top zone")
+        return SetupResult(setup_name=name, fired=False, reason="not in top zone — won't sell dip")
+    dist_from_low_pct = (ctx["entry"] - ctx["rolling_low"]) / ctx["entry"] * 100
+    if dist_from_low_pct < MIN_OPPOSITE_RANGE_PCT:
+        return SetupResult(setup_name=name, fired=False, reason="too close to range low — not a top")
     if abs(change_24h_pct) < MIN_FAST_24H_PCT:
         return SetupResult(setup_name=name, fired=False, reason="24h move too slow")
 
@@ -97,17 +107,18 @@ def _sell_top(ctx: dict, change_24h_pct: float) -> SetupResult:
     o, h, l, c = float(bar["open"]), float(bar["high"]), float(bar["low"]), float(bar["close"])
     upper_wick = h - max(o, c)
     wick_ratio = upper_wick / ctx["full_range"]
+    close_pos = (c - l) / ctx["full_range"]
     red = c < o
-    if not red and wick_ratio < MIN_WICK_RATIO:
-        return SetupResult(setup_name=name, fired=False, reason="no top rejection candle")
+    if not ((red and close_pos <= 0.60) or wick_ratio >= MIN_WICK_RATIO):
+        return SetupResult(setup_name=name, fired=False, reason="no top rejection — wait for fade")
 
-    stop = ctx["rolling_high"] + entry * 0.0002
+    stop = max(ctx["rolling_high"], h) + entry * 0.0003
     if stop <= entry:
-        stop = entry * (1 + 0.0022)
+        stop = entry * (1 + 0.0025)
     risk = stop - entry
     if risk <= 0:
         return SetupResult(setup_name=name, fired=False, reason="invalid stop")
-    targets = [entry - risk * T1_R, entry - risk * (T1_R + 0.25)]
+    targets = [entry - risk * T1_R, entry - risk * (T1_R + 0.5)]
     pump_pct = (entry - ctx["rolling_low"]) / entry * 100
     return SetupResult(
         setup_name=name,
@@ -116,26 +127,25 @@ def _sell_top(ctx: dict, change_24h_pct: float) -> SetupResult:
         entry=entry,
         stop_loss=stop,
         targets=targets,
-        reason=f"SELL TOP · 1m high zone · pumped {pump_pct:.2f}% · 24h {change_24h_pct:+.1f}%",
-        sl_basis="1m_top_high",
-        metadata={"scalp_type": "sell_top", "range_pct": ctx["range_pct"], "volume_confirmed": True},
+        reason=f"SELL TOP · short at range high ({ctx['position']*100:.0f}%) · pumped {pump_pct:.2f}%",
+        sl_basis="above_1m_swing_high",
+        metadata={"scalp_type": "sell_top", "range_pct": ctx["range_pct"], "zone": ctx["position"]},
     )
 
 
 def dip_top_scalp(df: pd.DataFrame, change_24h_pct: float = 0.0) -> list[SetupResult]:
-    """Return 0–2 setups: buy dip (long) and/or sell top (short) on 1m."""
+    """Return 0–1 setup: buy dip OR sell top on 1m (never both, never chase)."""
     d = ensure_ohlcv(df)
     ctx = _range_context(d)
     if not ctx:
         return []
-    out: list[SetupResult] = []
     buy = _buy_dip(ctx, change_24h_pct)
-    if buy.fired:
-        out.append(buy)
     sell = _sell_top(ctx, change_24h_pct)
-    if sell.fired:
-        out.append(sell)
-    return out
+    if buy.fired and not sell.fired:
+        return [buy]
+    if sell.fired and not buy.fired:
+        return [sell]
+    return []
 
 
 def momentum_scalp(df: pd.DataFrame, change_24h_pct: float = 0.0) -> SetupResult:
