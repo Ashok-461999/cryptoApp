@@ -72,8 +72,8 @@ def _can_execute(signal: dict) -> tuple[bool, str]:
     margin = float(signal.get("margin_usdt") or 0)
     if margin > 0 and bal < margin * 1.05:
         return False, f"insufficient USDT balance ({bal:.2f} < margin {margin:.2f})"
-    if margin > bal * 0.25:
-        return False, f"margin ${margin:.2f} exceeds 25% of wallet (${bal:.2f})"
+    if margin > bal * 0.35:
+        return False, f"margin ${margin:.2f} exceeds 35% of wallet (${bal:.2f})"
     max_loss = float(signal.get("max_loss_usdt") or 0)
     if max_loss > s.risk_per_trade_usdt_max * 1.05:
         return False, f"max loss ${max_loss:.2f} exceeds ${s.risk_per_trade_usdt_max:.2f} cap"

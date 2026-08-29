@@ -39,9 +39,8 @@ def _trading_payload() -> dict:
         "scalp_rr_ratio": s.scalp_rr_ratio,
         "slippage_pct": s.slippage_pct,
         "target_profit_note": (
-            f"1:1 / 1:2 off SL distance · net ~₹{s.target_profit_inr_min:.0f}–{s.take_profit_inr:.0f} after fees · "
-            f"loss ₹{s.risk_per_trade_inr:.0f}–{round(s.risk_per_trade_usdt_max * s.usdt_to_inr):.0f} at SL · "
-            f"HQ ≥{s.high_quality_min_confidence}% uses 1:{s.scalp_rr_ratio:.0f}"
+            f"Pure scalp · ₹{s.risk_per_trade_inr:.0f} risk · ₹{s.target_profit_inr_min:.0f}–{s.take_profit_inr:.0f} profit · "
+            f"{s.leverage_min}–{s.leverage_hq_max}x leverage · buy dip / sell top"
         ),
         "max_signals_per_day": s.max_take_signals_per_day,
         "signals_today": count_signals_today(),
@@ -89,7 +88,8 @@ def _trading_payload() -> dict:
         "why_this_trade": (
             f"1m buy-dip / sell-top on top {s.top_mover_scan_count} fast movers. "
             f"Up to {s.max_take_signals_per_day} scalps/day · scan every 1 min · max hold {s.scalp_holding_minutes} min. "
-            f"Risk ₹{s.risk_per_trade_inr:.0f} at SL · 1:1/1:2 TP off structure · max hold {s.scalp_holding_minutes} min."
+            f"Pure scalp ₹{s.risk_per_trade_inr:.0f} risk · ₹{s.target_profit_inr_min:.0f}–{s.take_profit_inr:.0f} target · "
+            f"{s.leverage_min}–{s.leverage_hq_max}x · max hold {s.scalp_holding_minutes} min."
             + (
                 " AUTO-EXECUTE ON — orders placed on Binance Futures."
                 if is_auto_trade_enabled()

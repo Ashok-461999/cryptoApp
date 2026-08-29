@@ -9,32 +9,32 @@ class Settings(BaseSettings):
     app_env: str = "development"
     cors_origins: str = "*"
 
-    # Capital & risk — scalp 1:1 / 1:2 off SL distance (fees + slippage buffered)
+    # Pure scalp — ₹100 risk, ₹150–200 profit, high leverage
     crypto_capital_inr: float = 20000.0
-    risk_per_trade_usdt: float = 0.30  # ~₹25 at SL
-    risk_per_trade_usdt_max: float = 0.36  # ~₹30 at SL
-    scalp_rr_min: float = 1.0  # 1:1 for standard signals
-    scalp_rr_ratio: float = 2.0  # 1:2 for HQ signals (80%+ confidence)
-    take_profit_usdt: float = 0.48  # reference ~₹40 net at 1:2
-    take_profit_usdt_min: float = 0.24  # ~₹20 at 1:1
-    take_profit_usdt_max: float = 0.60  # ~₹50 at 1:2
-    min_win_close_usdt: float = 0.18  # bank small green on timeout (~₹15)
+    risk_per_trade_usdt: float = 1.20  # ~₹100 at SL
+    risk_per_trade_usdt_max: float = 1.25  # ~₹104 cap
+    scalp_rr_min: float = 1.5  # ~₹150 on ₹100 risk
+    scalp_rr_ratio: float = 2.0  # ~₹200 on ₹100 risk (HQ)
+    take_profit_usdt: float = 1.81  # ~₹150
+    take_profit_usdt_min: float = 1.81  # ~₹150
+    take_profit_usdt_max: float = 2.41  # ~₹200
+    min_win_close_usdt: float = 1.45  # bank ~₹120+ on timeout scalp
     binance_taker_fee_pct: float = 0.04
-    slippage_pct: float = 0.12  # realistic entry slippage % on notional
-    fee_buffer_usdt: float = 0.01
-    max_notional_usdt_small_wallet: float = 42.0  # cap ~$40 pos on ~$35 wallet
-    small_wallet_threshold_usdt: float = 60.0
-    bracket_min_distance_pct: float = 0.20  # SL/TP must be 0.2%+ from fill
-    min_net_profit_to_fee_ratio: float = 1.2  # used at execute time only
-    max_deploy_pct: float = 40.0
+    slippage_pct: float = 0.12
+    fee_buffer_usdt: float = 0.02
+    max_notional_usdt_small_wallet: float = 120.0  # larger scalp size at high leverage
+    small_wallet_threshold_usdt: float = 80.0
+    bracket_min_distance_pct: float = 0.15
+    min_net_profit_to_fee_ratio: float = 1.0
+    max_deploy_pct: float = 45.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"
-    min_rr_for_take: float = 1.0  # HQ notify — matches 1:1 scalp floor
+    min_rr_for_take: float = 1.5
     normal_min_rr: float = 1.0
-    leverage_min: int = 15
-    leverage_max: int = 20
-    leverage_hq_min: int = 20  # confidence >= 80%
-    leverage_hq_max: int = 25  # confidence >= 90%
+    leverage_min: int = 20
+    leverage_max: int = 25
+    leverage_hq_min: int = 25
+    leverage_hq_max: int = 30
     high_quality_min_confidence: int = 80
     elite_min_confidence: int = 90
 
@@ -123,8 +123,8 @@ class Settings(BaseSettings):
     binance_futures_testnet: bool = False
     auto_execute_trades: bool = False
     auto_execute_min_confidence: int = 72
-    max_exchange_trades_per_day: int = 80
-    max_exchange_open_positions: int = 1  # one trade at a time on small wallet
+    max_exchange_trades_per_day: int = 150
+    max_exchange_open_positions: int = 2
     trading_paused_default: bool = True
 
     @property

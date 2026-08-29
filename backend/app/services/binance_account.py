@@ -44,7 +44,7 @@ def get_available_usdt(settings: Settings | None = None) -> float:
 
 
 def fixed_risk_usdt(settings: Settings | None = None) -> float:
-    """Fixed max loss at SL in USDT (~₹20–30 band, fees extra)."""
+    """Fixed max loss at SL in USDT (~₹100 band)."""
     s = settings or get_settings()
     return min(s.risk_per_trade_usdt, s.risk_per_trade_usdt_max)
 
@@ -55,28 +55,28 @@ def target_profit_usdt(settings: Settings | None = None) -> float:
 
 
 def per_trade_deploy_pct(capital_usdt: float, settings: Settings | None = None) -> float:
-    """Small wallet — low deploy % so fees don't dominate."""
+    """Pure scalp — allow more margin at high leverage."""
     s = settings or get_settings()
     if capital_usdt < s.small_wallet_threshold_usdt:
-        return min(s.max_deploy_pct, 12.0)
-    if capital_usdt < 120:
-        return min(s.max_deploy_pct, 18.0)
+        return min(s.max_deploy_pct, 28.0)
+    if capital_usdt < 150:
+        return min(s.max_deploy_pct, 32.0)
     return s.max_deploy_pct
 
 
 def max_notional_for_wallet(capital_usdt: float, settings: Settings | None = None) -> float:
     s = settings or get_settings()
     if capital_usdt < s.small_wallet_threshold_usdt:
-        return s.max_notional_usdt_small_wallet
-    return capital_usdt * 3.0
+        return min(s.max_notional_usdt_small_wallet, capital_usdt * 3.5)
+    return capital_usdt * 4.0
 
 
 def scalp_rr_for_confidence(confidence: int, settings: Settings | None = None) -> float:
-    """HQ signals aim 1:2; others 1:1 — faster TP, less time in market."""
+    """₹150–₹200 targets: 1.5R standard, 2R on HQ signals."""
     s = settings or get_settings()
     if confidence >= s.high_quality_min_confidence:
         return s.scalp_rr_ratio
-    return s.scalp_rr_min
+    return max(s.scalp_rr_min, 1.5)
 
 
 def leverage_for_confidence(confidence: int, settings: Settings | None = None) -> tuple[int, int]:
