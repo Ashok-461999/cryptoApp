@@ -17,6 +17,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _emailController = TextEditingController();
   final _goalController = TextEditingController();
   String _experience = 'Scalp Futures';
+  bool _togglingTrading = false;
 
   @override
   void initState() {
@@ -44,6 +45,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile saved'), backgroundColor: AppColors.profit),
       );
+    }
+  }
+
+  Future<void> _setTrading(bool start) async {
+    setState(() => _togglingTrading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      if (start) {
+        await api.startTrading();
+      } else {
+        await api.stopTrading();
+      }
+      ref.invalidate(tradingSettingsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(start ? 'Trading started — scanning & auto-trade on' : 'Trading stopped — no new signals or orders'),
+            backgroundColor: start ? AppColors.profit : AppColors.warn,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.loss),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _togglingTrading = false);
     }
   }
 
@@ -136,12 +166,80 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: 20),
         trading.when(
-          data: (cfg) => PremiumCard(
-            highlight: true,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          data: (cfg) {
+            final paused = cfg['trading_paused'] == true;
+            return Column(
               children: [
-                const Text('LIVE SCALP SETUP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 1.2)),
+                PremiumCard(
+                  highlight: !paused,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            paused ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                            color: paused ? AppColors.warn : AppColors.profit,
+                            size: 28,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  cfg['status_label'] ?? (paused ? 'PAUSED' : 'RUNNING'),
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: paused ? AppColors.warn : AppColors.profit,
+                                  ),
+                                ),
+                                Text(
+                                  paused
+                                      ? 'No scans or Binance orders until you tap Start'
+                                      : 'Scanning movers & auto-trading on Binance',
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _togglingTrading ? null : () => _setTrading(paused),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: paused ? AppColors.profit : AppColors.loss,
+                            foregroundColor: AppColors.bg,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: _togglingTrading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.bg),
+                                )
+                              : Icon(paused ? Icons.play_arrow : Icons.stop, size: 22),
+                          label: Text(
+                            _togglingTrading ? 'Please wait…' : (paused ? 'START TRADING' : 'STOP TRADING'),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                PremiumCard(
+                  highlight: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('LIVE SCALP SETUP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 1.2)),
                 const SizedBox(height: 14),
                 Row(
                   children: [
@@ -245,6 +343,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
+              ],
+            );
+          },
           loading: () => const PremiumCard(child: Center(child: CircularProgressIndicator(color: AppColors.accent))),
           error: (_, __) => const PremiumCard(child: Text('Loading live setup from AWS…', style: TextStyle(color: AppColors.textMuted))),
         ),

@@ -68,6 +68,24 @@ class ApiService {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> startTrading() async {
+    final r = await http.post(Uri.parse('$baseUrl/settings/trading/start'));
+    final body = jsonDecode(r.body) as Map<String, dynamic>;
+    if (r.statusCode != 200) {
+      throw Exception(body['detail'] ?? 'Failed to start trading');
+    }
+    return body;
+  }
+
+  Future<Map<String, dynamic>> stopTrading() async {
+    final r = await http.post(Uri.parse('$baseUrl/settings/trading/stop'));
+    final body = jsonDecode(r.body) as Map<String, dynamic>;
+    if (r.statusCode != 200) {
+      throw Exception(body['detail'] ?? 'Failed to stop trading');
+    }
+    return body;
+  }
+
   Future<Map<String, dynamic>> takeSignal(Map<String, dynamic> payload) async {
     final r = await http.post(
       Uri.parse('$baseUrl/signals/take'),

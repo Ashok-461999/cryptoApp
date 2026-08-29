@@ -322,6 +322,42 @@ class _DailyGoalBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
             const Text('ScalpTrack Live', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.text, fontSize: 20)),
+          if (!serverOffline && tradingConfig != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: (tradingConfig!['trading_paused'] == true ? AppColors.warn : AppColors.profit).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: (tradingConfig!['trading_paused'] == true ? AppColors.warn : AppColors.profit).withValues(alpha: 0.5),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    tradingConfig!['trading_paused'] == true ? Icons.pause : Icons.bolt,
+                    size: 14,
+                    color: tradingConfig!['trading_paused'] == true ? AppColors.warn : AppColors.profit,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    tradingConfig!['status_label'] ?? (tradingConfig!['trading_paused'] == true ? 'PAUSED' : 'RUNNING'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: tradingConfig!['trading_paused'] == true ? AppColors.warn : AppColors.profit,
+                    ),
+                  ),
+                  if (tradingConfig!['trading_paused'] == true) ...[
+                    const SizedBox(width: 8),
+                    const Text('· tap Start in Settings', style: TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                  ],
+                ],
+              ),
+            ),
+          ],
           if (serverOffline) ...[
             const SizedBox(height: 6),
             const Text('Server paused — tell admin to start when ready', style: TextStyle(fontSize: 11, color: AppColors.loss, fontWeight: FontWeight.w700)),

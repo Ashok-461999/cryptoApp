@@ -27,7 +27,10 @@ def _save_payload(t: SignalTrade, payload: dict) -> None:
 
 
 def is_auto_trade_enabled() -> bool:
+    from app.services.trading_control import is_trading_paused
     s = get_settings()
+    if is_trading_paused():
+        return False
     return s.auto_execute_trades and binance_trading.is_configured()
 
 

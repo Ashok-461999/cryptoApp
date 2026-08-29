@@ -6,19 +6,20 @@ from app.services.binance_account import fetch_binance_ui
 from app.services.binance_trading_client import binance_trading
 from app.services.signal_tracker import count_signals_today, count_user_takes_today
 from app.services.trade_executor import count_exchange_trades_today, is_auto_trade_enabled
+from app.services.trading_control import get_trading_status, set_trading_paused
 from app.signals.crypto_scanner import crypto_scanner
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-@router.get("/trading")
-def get_trading_settings():
-    """Actual trading parameters — shown in app Settings."""
+def _trading_payload() -> dict:
     s = get_settings()
     binance = fetch_binance_ui()
     api_ok = binance is not None
     balance_usdt = float(binance["wallet_usdt"]) if binance else 0.0
     display_capital_inr = float(binance["equity_inr"]) if binance else s.crypto_capital_inr
+
+    control = get_trading_status()
 
     return {
         "app_name": "ScalpTrack Pro",
@@ -47,7 +48,7 @@ def get_trading_settings():
         "paper_trading": False,
         "live_trading": True,
         "auto_execute_trades": is_auto_trade_enabled(),
-        "auto_execute_configured": binance_trading.is_configured(),
+        "auto_execute_configured": binance_trading.is_configured() and s.auto_execute_trades,
         "auto_execute_api_ok": api_ok,
         "exchange_trades_today": count_exchange_trades_today(),
         "max_exchange_trades_per_day": s.max_exchange_trades_per_day,
@@ -76,7 +77,35 @@ def get_trading_settings():
             + (
                 " AUTO-EXECUTE ON — orders placed on Binance Futures."
                 if is_auto_trade_enabled()
-                else " Manual mode — tap TAKE or enable AUTO_EXECUTE_TRADES on server."
+                else (
+                    " TRADING PAUSED — tap Start in Settings."
+                    if control["trading_paused"]
+                    else " Manual mode — tap TAKE or enable AUTO_EXECUTE_TRADES on server."
+                )
             )
         ),
+        **control,
     }
+
+
+@router.get("/trading")
+def get_trading_settings():
+    """Actual trading parameters — shown in app Settings."""
+    return _trading_payload()
+
+
+@router.post("/trading/stop")
+def stop_trading():
+    """Pause scans and Binance auto-execute (server API stays online)."""
+    status = set_trading_paused(True, by="app")
+    return {"ok": True, "message": "Trading paused — no new signals or orders", **status}
+
+
+@router.post("/trading/start")
+def start_trading():
+    """Resume scans and auto-execute."""
+    status = set_trading_paused(False, by="app")
+    from app.signals.crypto_scanner import crypto_scanner
+    import threading
+    threading.Thread(target=crypto_scanner.scan_all, daemon=True).start()
+    return {"ok": True, "message": "Trading started — scanning and auto-trade active", **status}

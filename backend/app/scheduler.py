@@ -16,6 +16,9 @@ _scheduler: BackgroundScheduler | None = None
 
 def _run_scan():
     try:
+        from app.services.trading_control import is_trading_paused
+        if is_trading_paused():
+            return
         signals = crypto_scanner.scan_all()
         logger.info("Scan complete — %d TAKE signals", len(signals))
     except Exception:

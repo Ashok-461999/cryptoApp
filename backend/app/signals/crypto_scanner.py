@@ -162,6 +162,9 @@ class CryptoScanner:
         return f"{sig.get('setup')}:{sig.get('symbol')}:{sig.get('direction')}"
 
     def scan_all(self) -> list[dict]:
+        from app.services.trading_control import is_trading_paused
+        if is_trading_paused():
+            return []
         settings = get_settings()
         self._refresh_take_count()
 

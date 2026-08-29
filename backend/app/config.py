@@ -88,6 +88,7 @@ class Settings(BaseSettings):
     auto_execute_min_confidence: int = 55
     max_exchange_trades_per_day: int = 150
     max_exchange_open_positions: int = 8
+    trading_paused_default: bool = True
 
     @property
     def cors_origin_list(self) -> list[str]:
