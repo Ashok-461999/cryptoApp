@@ -10,9 +10,8 @@ from sqlalchemy import func, select
 
 from app.config import get_settings
 from app.db.models import SignalTrade, get_session
-from app.services.binance_account import get_live_capital_usdt, max_notional_for_wallet
 from app.services.binance_trading_client import BinanceTradingError, binance_trading
-from app.services.trading_fees import passes_fee_gate, round_trip_fee_usdt
+from app.services.trading_fees import passes_fee_gate
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +57,8 @@ def count_open_exchange_positions() -> int:
 
 
 def _can_execute(signal: dict) -> tuple[bool, str]:
+    from app.services.binance_account import get_live_capital_usdt, max_notional_for_wallet
+
     s = get_settings()
     if not is_auto_trade_enabled():
         return False, "auto_execute disabled or API keys missing"
