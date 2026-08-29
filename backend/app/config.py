@@ -9,21 +9,23 @@ class Settings(BaseSettings):
     app_env: str = "development"
     cors_origins: str = "*"
 
-    # Capital & risk — scalp: ₹20–30 loss, ₹80–100 net profit (after fees)
+    # Capital & risk — scalp 1:1 / 1:2 off SL distance (fees + slippage buffered)
     crypto_capital_inr: float = 20000.0
-    risk_per_trade_usdt: float = 0.30  # ~₹25
-    risk_per_trade_usdt_max: float = 0.36  # ~₹30
-    take_profit_usdt: float = 1.05  # ~₹87 net target (mid band)
-    take_profit_usdt_min: float = 0.96  # ~₹80 net
-    take_profit_usdt_max: float = 1.20  # ~₹100 net
-    min_win_close_usdt: float = 0.80  # close early once ~₹66+ net in book
-    # Binance USDT-M taker ~0.04% per side; buffer for slippage
+    risk_per_trade_usdt: float = 0.30  # ~₹25 at SL
+    risk_per_trade_usdt_max: float = 0.36  # ~₹30 at SL
+    scalp_rr_min: float = 1.0  # 1:1 for standard signals
+    scalp_rr_ratio: float = 2.0  # 1:2 for HQ signals (80%+ confidence)
+    take_profit_usdt: float = 0.48  # reference ~₹40 net at 1:2
+    take_profit_usdt_min: float = 0.24  # ~₹20 at 1:1
+    take_profit_usdt_max: float = 0.60  # ~₹50 at 1:2
+    min_win_close_usdt: float = 0.18  # bank small green on timeout (~₹15)
     binance_taker_fee_pct: float = 0.04
-    fee_buffer_usdt: float = 0.02
+    slippage_pct: float = 0.45  # entry drag % (fees + market fill — see live fills)
+    fee_buffer_usdt: float = 0.03
     max_deploy_pct: float = 40.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"
-    min_rr_for_take: float = 2.5  # HQ notify filter
+    min_rr_for_take: float = 1.0  # HQ notify — matches 1:1 scalp floor
     normal_min_rr: float = 1.0
     leverage_min: int = 15
     leverage_max: int = 20

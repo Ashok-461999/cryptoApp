@@ -15,12 +15,12 @@ from app.services.binance_account import (
     max_leverage_for_capital,
     min_leverage_for_capital,
     per_trade_deploy_pct,
-    target_profit_usdt,
+    scalp_rr_for_confidence,
 )
 from app.services.crypto_futures_client import futures_client
 from app.services.crypto_watchlist import WatchlistSymbol, get_scan_symbol_order, get_top_24h_movers, get_watchlist, refresh_watchlist
 from app.services.signal_tracker import enrich_live_signals, mark_user_taken, save_signal
-from app.services.trading_fees import gross_tp_for_net_profit, round_trip_fee_usdt
+from app.services.trading_fees import estimated_entry_drag_usdt, round_trip_fee_usdt, tp_price_from_rr
 from app.signals.indicators import atr_pct
 from app.signals.market_structure import swing_high_low
 from app.signals.momentum_scalp import SETUP_NAME as DIP_TOP_SETUP, dip_top_scalp
@@ -483,33 +483,29 @@ class CryptoScanner:
                 if plan.max_loss_usdt > settings.risk_per_trade_usdt_max * 1.05:
                     continue
 
-                tp_net = target_profit_usdt(settings)
+                rr = scalp_rr_for_confidence(confidence, settings)
                 fee_est = round_trip_fee_usdt(plan.notional_usdt, settings)
-                tp_gross = gross_tp_for_net_profit(tp_net, plan.notional_usdt, settings)
-                notional = plan.notional_usdt
-                if notional > 0:
-                    move_frac = tp_gross / notional
-                    t1 = entry * (1 + move_frac * sign)
-                    t2 = entry * (1 + move_frac * sign * 1.15)
-                else:
-                    t1 = entry + sign * risk * 2.5
-                    t2 = t1
+                entry_drag = estimated_entry_drag_usdt(plan.notional_usdt, settings)
+                t1, t2, tp_gross, tp_net = tp_price_from_rr(
+                    entry, stop, sign, rr, plan.notional_usdt, settings,
+                )
 
                 min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
                 if confidence <= min_conf:
                     continue
                 notify = confidence >= settings.notify_min_confidence or (
-                    decision.get("strategy_tier") == "TOP" and confidence >= 78 and plan.risk_reward >= settings.min_rr_for_take
+                    decision.get("strategy_tier") == "TOP" and confidence >= 78
                 )
-                rr_label = "1:1" if plan.risk_reward >= 0.95 else f"1:{plan.risk_reward:.1f}"
+                rr_label = f"1:{rr:.0f}" if rr >= 1.0 else "1:1"
 
                 signal = plan.to_dict()
                 signal["target_1_price"] = t1
                 signal["target_2_price"] = t2
                 signal["max_loss_usdt"] = round(plan.max_loss_usdt, 3)
-                signal["target_profit_usdt"] = tp_net
+                signal["target_profit_usdt"] = round(tp_net, 3)
                 signal["target_profit_gross_usdt"] = round(tp_gross, 3)
-                signal["estimated_fees_usdt"] = round(fee_est, 3)
+                signal["estimated_fees_usdt"] = round(fee_est + entry_drag, 3)
+                signal["scalp_rr"] = rr
                 hold_m = settings.scalp_holding_minutes
                 scalp_label = "Buy dip" if result.direction == "bullish" else "Sell top"
                 signal.update({
@@ -531,10 +527,10 @@ class CryptoScanner:
                         f"Entry TF: {ENTRY_TF} · max hold {hold_m} min · scan every 1m",
                         f"Market: {regime.summary} · 24h {sym.change_pct_24h:+.1f}%",
                         f"Trade decision: {decision['decision_reason']}",
-                        f"Risk:Reward {round(plan.risk_reward, 2)} to T1 (quick scalp)",
+                        f"Risk:Reward {rr_label} to T1 (SL-distance scalp)",
                         f"Confidence: {confidence}% — {'A+ NOTIFY' if notify else 'A quality scalp'}",
                         f"SL basis: {result.sl_basis}",
-                        f"Leverage: {plan.leverage}x · Risk ₹{settings.risk_per_trade_inr:.0f} · Net target ₹{round(tp_net * settings.usdt_to_inr):.0f} (fees ~₹{round(fee_est * settings.usdt_to_inr):.0f})",
+                        f"Leverage: {plan.leverage}x · Risk ₹{settings.risk_per_trade_inr:.0f} · {rr_label} net ~₹{round(tp_net * settings.usdt_to_inr):.0f} (costs ~₹{round((fee_est + entry_drag) * settings.usdt_to_inr):.0f})",
                         f"Fast mover · Funding: {round(funding, 4)}% · {sym.category.upper()}",
                     ],
                     "volume_24h": sym.volume_24h_usdt,
@@ -546,8 +542,9 @@ class CryptoScanner:
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "funding_rate_pct": round(funding, 4),
                     "max_loss_inr": round(plan.max_loss_usdt * settings.usdt_to_inr, 0),
-                    "target_pnl_inr": round(plan.target_profit_usdt * settings.usdt_to_inr, 0),
-                    "target_profit_inr": round(plan.target_profit_usdt * settings.usdt_to_inr, 0),
+                    "target_pnl_inr": round(tp_net * settings.usdt_to_inr, 0),
+                    "target_profit_inr": round(tp_net * settings.usdt_to_inr, 0),
+                    "risk_reward": rr,
                     "margin_inr": round(plan.margin_usdt * settings.usdt_to_inr, 0),
                     "notional_inr": round(plan.notional_usdt * settings.usdt_to_inr, 0),
                     "position_inr": round(plan.margin_usdt * settings.usdt_to_inr * plan.leverage, 0),

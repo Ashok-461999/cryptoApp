@@ -64,6 +64,14 @@ def per_trade_deploy_pct(capital_usdt: float, settings: Settings | None = None) 
     return s.max_deploy_pct
 
 
+def scalp_rr_for_confidence(confidence: int, settings: Settings | None = None) -> float:
+    """HQ signals aim 1:2; others 1:1 — faster TP, less time in market."""
+    s = settings or get_settings()
+    if confidence >= s.high_quality_min_confidence:
+        return s.scalp_rr_ratio
+    return s.scalp_rr_min
+
+
 def leverage_for_confidence(confidence: int, settings: Settings | None = None) -> tuple[int, int]:
     """Higher confidence → higher leverage band for quick scalps."""
     s = settings or get_settings()

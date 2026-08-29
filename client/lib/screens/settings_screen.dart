@@ -358,8 +358,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               SizedBox(height: 8),
               Text(
                 '• 1m scalp: BUY the dip, SELL the top on fast movers\n'
-                '• Up to 200 scalps/day · 3 min max hold · net ₹80–100 after fees\n'
-                '• Loss ₹20–30 at SL · 15–25x leverage (HQ signals higher)\n'
+                '• 1:1 / 1:2 scalp off SL · HQ signals use 1:2 · max hold 3 min\n'
+                '• Loss ₹20–30 at SL · win ₹20–50 net (after fees) · 15–25x leverage\n'
                 '• Only trade coins with high 24h % move\n'
                 '• Take notification alerts seriously\n'
                 '• Quality over quantity — skip weak setups',
