@@ -32,6 +32,7 @@ def _trading_payload() -> dict:
         "risk_percent": s.risk_percent,
         "target_profit_inr_min": s.target_profit_inr_min,
         "take_profit_inr": s.take_profit_inr,
+        "take_profit_inr_max": s.take_profit_inr_max,
         "take_profit_usdt": s.take_profit_usdt,
         "take_profit_usdt_min": s.take_profit_usdt_min,
         "take_profit_usdt_max": s.take_profit_usdt_max,
@@ -39,7 +40,7 @@ def _trading_payload() -> dict:
         "scalp_rr_ratio": s.scalp_rr_ratio,
         "slippage_pct": s.slippage_pct,
         "target_profit_note": (
-            f"Pure scalp · ₹{s.risk_per_trade_inr:.0f} risk · ₹{s.target_profit_inr_min:.0f}–{s.take_profit_inr:.0f} profit · "
+            f"Pure scalp · ₹{s.risk_per_trade_inr:.0f} risk · ₹{s.target_profit_inr_min:.0f}–{s.take_profit_inr_max:.0f} profit · "
             f"{s.leverage_min}–{s.leverage_hq_max}x leverage · buy dip / sell top"
         ),
         "max_signals_per_day": s.max_take_signals_per_day,

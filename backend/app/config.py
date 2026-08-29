@@ -55,6 +55,10 @@ class Settings(BaseSettings):
         return round(self.take_profit_usdt_min * self.usdt_to_inr, 0)
 
     @property
+    def take_profit_inr_max(self) -> float:
+        return round(self.take_profit_usdt_max * self.usdt_to_inr, 0)
+
+    @property
     def min_win_close_inr(self) -> float:
         return round(self.min_win_close_usdt * self.usdt_to_inr, 0)
 

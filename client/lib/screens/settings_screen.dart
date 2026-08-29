@@ -262,7 +262,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Row(
                   children: [
                     StatTile(label: 'RISK / TRADE', value: '₹${(cfg['risk_per_trade_inr'] ?? 200).toStringAsFixed(0)}', valueColor: AppColors.loss),
-                    StatTile(label: 'TARGET', value: '₹${(cfg['take_profit_inr'] ?? 150).toStringAsFixed(0)}+', valueColor: AppColors.profit),
+                    StatTile(label: 'TARGET', value: '₹${(cfg['target_profit_inr_min'] ?? 150).toStringAsFixed(0)}–${(cfg['take_profit_inr_max'] ?? 200).toStringAsFixed(0)}', valueColor: AppColors.profit),
                   ],
                 ),
                 const SizedBox(height: 12),
