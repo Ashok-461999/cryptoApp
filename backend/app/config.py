@@ -20,12 +20,12 @@ class Settings(BaseSettings):
     take_profit_usdt_max: float = 0.60  # ~₹50 at 1:2
     min_win_close_usdt: float = 0.18  # bank small green on timeout (~₹15)
     binance_taker_fee_pct: float = 0.04
-    slippage_pct: float = 0.45  # entry drag % (fees + market fill — see live fills)
-    fee_buffer_usdt: float = 0.03
+    slippage_pct: float = 0.12  # realistic entry slippage % on notional
+    fee_buffer_usdt: float = 0.01
     max_notional_usdt_small_wallet: float = 42.0  # cap ~$40 pos on ~$35 wallet
     small_wallet_threshold_usdt: float = 60.0
     bracket_min_distance_pct: float = 0.20  # SL/TP must be 0.2%+ from fill
-    min_net_profit_to_fee_ratio: float = 2.5  # skip if fees eat the scalp
+    min_net_profit_to_fee_ratio: float = 1.2  # used at execute time only
     max_deploy_pct: float = 40.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"

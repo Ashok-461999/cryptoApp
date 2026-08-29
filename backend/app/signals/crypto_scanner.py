@@ -395,8 +395,8 @@ class CryptoScanner:
         lower_wick = (min(o, c) - l) / rng
         upper_wick = (h - max(o, c)) / rng
         if direction in ("bullish", "LONG"):
-            return (c > o and close_pos >= 0.38) or lower_wick >= 0.30
-        return (c < o and close_pos <= 0.62) or upper_wick >= 0.30
+            return (c > o and close_pos >= 0.35) or lower_wick >= 0.25
+        return (c < o and close_pos <= 0.65) or upper_wick >= 0.25
 
     def _setups_for_symbol(self, sym: WatchlistSymbol, disabled_setups: set[str]):
         """Fast movers: 1m buy-dip / sell-top only."""
@@ -526,8 +526,7 @@ class CryptoScanner:
                 t1, t2, tp_gross, tp_net = targets
                 if not validate_scalp_levels(entry, stop, t1, direction):
                     continue
-                if not passes_fee_gate(tp_net, plan.notional_usdt, settings):
-                    continue
+                # Fee gate only blocks auto-execute, not showing the signal
 
                 min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
                 if confidence <= min_conf:

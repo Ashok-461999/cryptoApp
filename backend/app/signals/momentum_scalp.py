@@ -9,13 +9,13 @@ from app.signals.schemas import SetupResult, T1_R
 
 SETUP_NAME = "dip_top_scalp"
 LOOKBACK = 12
-DIP_ZONE = 0.28  # bottom 28% of range only
-TOP_ZONE = 0.72  # top 28% of range only
+DIP_ZONE = 0.32  # bottom 32% = buy dip zone
+TOP_ZONE = 0.68  # top 32% = sell top zone
 MIN_RANGE_PCT = 0.22
 MIN_FAST_24H_PCT = 2.5
 MIN_WICK_RATIO = 0.32
 # Reject buy when price is still at highs / sell when still at lows (anti chase)
-MIN_OPPOSITE_RANGE_PCT = 0.35  # must be 0.35%+ away from opposite end
+MIN_OPPOSITE_RANGE_PCT = 0.25  # must be away from opposite end of range
 
 
 def _range_context(d: pd.DataFrame) -> dict | None:

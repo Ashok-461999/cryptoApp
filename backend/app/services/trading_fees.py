@@ -35,12 +35,14 @@ def net_profit_after_fees(gross_profit_usdt: float, notional_usdt: float, settin
 
 
 def passes_fee_gate(tp_net_usdt: float, notional_usdt: float, settings: Settings | None = None) -> bool:
-    """Reject scalps where round-trip fees eat the edge."""
+    """Reject only when gross edge cannot cover round-trip fees (execute-time check)."""
     s = settings or get_settings()
-    fees = round_trip_fee_usdt(notional_usdt, s) + estimated_entry_drag_usdt(notional_usdt, s)
-    if tp_net_usdt <= 0:
-        return False
-    return tp_net_usdt >= fees * s.min_net_profit_to_fee_ratio
+    fees_rt = round_trip_fee_usdt(notional_usdt, s)
+    if fees_rt <= 0:
+        return tp_net_usdt > 0
+    if tp_net_usdt > 0:
+        return tp_net_usdt >= fees_rt * s.min_net_profit_to_fee_ratio
+    return False
 
 
 def estimated_entry_drag_usdt(notional_usdt: float, settings: Settings | None = None) -> float:
@@ -73,5 +75,6 @@ def tp_price_from_rr(
     t2 = entry + direction_sign * (risk_dist * rr * 1.08 + cost_dist)
     stop_frac = risk_dist / entry
     tp_gross = notional_usdt * stop_frac * rr if notional_usdt > 0 else 0.0
+    tp_gross = max(tp_gross, fees + drag + s.fee_buffer_usdt)
     tp_net = max(0.0, tp_gross - fees - drag)
     return t1, t2, tp_gross, tp_net

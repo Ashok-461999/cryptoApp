@@ -15,4 +15,4 @@ def test_tp_price_1_to_2_rr():
 
 def test_entry_drag_positive():
     drag = estimated_entry_drag_usdt(21.27)
-    assert drag >= 0.08  # ~0.45% + fee on $21
+    assert drag >= 0.03
