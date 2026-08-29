@@ -1,4 +1,4 @@
-"""Crypto futures signal scanner — momentum scalp on 24h movers (max 10 min hold)."""
+"""Crypto futures signal scanner — 1m buy-dip / sell-top on fast movers."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from app.services.signal_tracker import enrich_live_signals, mark_user_taken, sa
 from app.services.trade_analytics import get_disabled_setups
 from app.signals.indicators import atr_pct
 from app.signals.market_structure import swing_high_low
-from app.signals.momentum_scalp import momentum_scalp
+from app.signals.momentum_scalp import SETUP_NAME as DIP_TOP_SETUP, dip_top_scalp
 from app.signals.position_sizing_crypto import plan_crypto_futures
 from app.signals.regime import detect_regime
 from app.signals.schemas import T1_R, T2_R
@@ -30,6 +30,7 @@ LOOKBACK = 120
 
 _CATEGORY_ORDER = {"mover": 0, "meme": 0, "major": 1, "alt": 2}
 FOCUS_PAIRS = frozenset({"BTCUSDT", "PAXGUSDT"})
+SCALP_SETUPS = frozenset({DIP_TOP_SETUP, "momentum_scalp", "dip_top_scalp"})
 
 
 class CryptoScanner:
@@ -57,7 +58,7 @@ class CryptoScanner:
         last = self._last_take_at.get(key)
         if not last:
             return False
-        gap = timedelta(minutes=max(5, settings.signal_cooldown_minutes))
+        gap = timedelta(minutes=max(1, settings.signal_cooldown_minutes))
         return datetime.now(timezone.utc) - last < gap
 
     def _sort_key(self, s: dict) -> tuple:
@@ -65,7 +66,7 @@ class CryptoScanner:
         high_first = 0 if s.get("priority_tier") == "HIGH" else 1
         setup_order = SETUP_PRIORITY.get(s.get("setup", ""), 9)
         mover_boost = 30 if s.get("pair") in self._trending_mover_pairs else 0
-        vwap_vp_boost = 15 if s.get("setup") in ("anchored_vwap", "volume_profile", "order_flow", "momentum_scalp") else 0
+        vwap_vp_boost = 15 if s.get("setup") in SCALP_SETUPS else 0
         meme_boost = 20 if settings.prioritize_meme_coins and s.get("category") in ("meme", "mover") else 0
         notify_boost = 40 if s.get("notify") else 0
         top_boost = 20 if s.get("strategy_tier") == "TOP" else 0
@@ -88,7 +89,7 @@ class CryptoScanner:
             self._emitted_today = set()
             self._skipped_today = set()
             self._high_priority_emitted_today = 0
-        self._take_count_today = len(self._emitted_today)
+            self._take_count_today = 0
 
     def _qualifies_high_priority(self, signal: dict, settings) -> bool:
         return (
@@ -217,14 +218,15 @@ class CryptoScanner:
         self._notify_scan_complete(self._active_signals)
 
         for sig in take_signals:
+            if self._take_count_today >= settings.max_take_signals_per_day:
+                break
             key = self._signal_key(sig)
             sig["status"] = "LIVE"
             trade_id = save_signal(sig)
             if trade_id:
                 sig["trade_id"] = trade_id
-            if key not in self._emitted_today:
-                self._emitted_today.add(key)
                 self._take_count_today += 1
+                self._emitted_today.add(f"{key}:{self._take_count_today}")
                 if sig.get("priority_tier") == "HIGH":
                     self._high_priority_emitted_today += 1
             self._last_take_at[key] = datetime.now(timezone.utc)
@@ -347,15 +349,15 @@ class CryptoScanner:
         return body < 0 and float(bar["close"]) < float(prev["low"])
 
     def _setups_for_symbol(self, sym: WatchlistSymbol, disabled_setups: set[str]):
-        """Meme/mover coins: momentum only. Majors: skip disabled SMC setups."""
+        """Fast movers: 1m buy-dip / sell-top only."""
         if sym.category in ("meme", "mover"):
-            if "momentum_scalp" not in disabled_setups:
-                yield "momentum_scalp", None
+            if DIP_TOP_SETUP not in disabled_setups:
+                yield DIP_TOP_SETUP, None
             return
         for setup_name, fn in SETUP_FUNCTIONS.items():
             if setup_name in disabled_setups or setup_name in PERMANENTLY_DISABLED_SETUPS:
                 continue
-            if setup_name == "momentum_scalp":
+            if setup_name in SCALP_SETUPS:
                 continue
             yield setup_name, fn
 
@@ -383,127 +385,130 @@ class CryptoScanner:
             return []
 
         for setup_name, fn in self._setups_for_symbol(sym, disabled_setups):
-            scalp_tight = setup_name == "momentum_scalp"
+            scalp_tight = setup_name in SCALP_SETUPS
             if scalp_tight:
-                result = momentum_scalp(entry_df, sym.change_pct_24h)
+                setup_results = dip_top_scalp(entry_df, sym.change_pct_24h)
                 bar_for_sl = entry_df.iloc[-1]
                 atr_val = float(bar_for_sl["close"]) * atr_p / 100.0 if atr_p > 0 else float(bar_for_sl["close"]) * 0.003
             else:
-                result = fn(df)
+                setup_results = [fn(df)]
                 bar_for_sl = bar_5m
                 atr_val = float(bar_for_sl["close"]) * atr_p / 100.0 if atr_p > 0 else float(bar_for_sl["close"]) * 0.008
-            if not result.fired or not result.stop_loss:
-                continue
 
-            direction = "LONG" if result.direction == "bullish" else "SHORT"
-            if self._in_cooldown(setup_name, sym.pair, direction):
-                continue
+            for result in setup_results:
+                if not result.fired or not result.stop_loss:
+                    continue
 
-            decision = evaluate_trade_decision(setup_name, result, regime, sym.category)
-            if not decision["can_take"]:
-                continue
+                direction = "LONG" if result.direction == "bullish" else "SHORT"
+                if self._in_cooldown(setup_name, sym.pair, direction):
+                    continue
 
-            if not scalp_tight and not self._confirm_entry_1m(result.direction or "bullish", entry_candles):
-                continue
+                decision = evaluate_trade_decision(setup_name, result, regime, sym.category)
+                if not decision["can_take"]:
+                    continue
 
-            entry = float(entry_df.iloc[-1]["close"])
-            stop = normalize_stop_loss(
-                entry=entry,
-                direction=result.direction or "bullish",
-                proposed_stop=float(result.stop_loss),
-                bar_low=float(bar_for_sl["low"]),
-                bar_high=float(bar_for_sl["high"]),
-                swing_low=swing_low,
-                swing_high=swing_high,
-                atr=atr_val,
-                tier=sym.tier,
-                scalp_tight=scalp_tight,
-            )
-            risk = abs(entry - stop)
-            if risk <= 0:
-                continue
-            sign = 1 if direction == "LONG" else -1
-            t1 = entry + sign * risk * T1_R
-            t2 = entry + sign * risk * T2_R
+                if not scalp_tight and not self._confirm_entry_1m(result.direction or "bullish", entry_candles):
+                    continue
 
-            plan = plan_crypto_futures(
-                symbol=sym.pair,
-                direction=direction,
-                entry=entry,
-                stop_loss=stop,
-                target_1=t1,
-                target_2=t2,
-                capital_usdt=settings.crypto_capital_usdt,
-                risk_percent=settings.risk_percent,
-                max_deploy_pct=settings.max_deploy_pct,
-                atr_pct=atr_p,
-                sl_basis=result.sl_basis,
-                scalp_mode=scalp_tight,
-            )
-            if not plan.can_afford:
-                continue
+                entry = float(entry_df.iloc[-1]["close"])
+                stop = normalize_stop_loss(
+                    entry=entry,
+                    direction=result.direction or "bullish",
+                    proposed_stop=float(result.stop_loss),
+                    bar_low=float(bar_for_sl["low"]),
+                    bar_high=float(bar_for_sl["high"]),
+                    swing_low=swing_low,
+                    swing_high=swing_high,
+                    atr=atr_val,
+                    tier=sym.tier,
+                    scalp_tight=scalp_tight,
+                )
+                risk = abs(entry - stop)
+                if risk <= 0:
+                    continue
+                sign = 1 if direction == "LONG" else -1
+                t1 = entry + sign * risk * T1_R
+                t2 = entry + sign * risk * T2_R
 
-            confidence = decision["take_confidence"]
-            min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
-            if confidence <= min_conf:
-                continue
-            notify = confidence >= settings.notify_min_confidence or (
-                decision.get("strategy_tier") == "TOP" and confidence >= 78 and plan.risk_reward >= settings.min_rr_for_take
-            )
-            rr_label = "1:1" if plan.risk_reward >= 0.95 else f"1:{plan.risk_reward:.1f}"
+                plan = plan_crypto_futures(
+                    symbol=sym.pair,
+                    direction=direction,
+                    entry=entry,
+                    stop_loss=stop,
+                    target_1=t1,
+                    target_2=t2,
+                    capital_usdt=settings.crypto_capital_usdt,
+                    risk_percent=settings.risk_percent,
+                    max_deploy_pct=settings.max_deploy_pct,
+                    atr_pct=atr_p,
+                    sl_basis=result.sl_basis,
+                    scalp_mode=scalp_tight,
+                )
+                if not plan.can_afford:
+                    continue
 
-            signal = plan.to_dict()
-            hold_m = settings.scalp_holding_minutes
-            signal.update({
-                "setup": setup_name,
-                "confidence": confidence,
-                "notify": notify,
-                "rr_label": rr_label,
-                "signal_grade": decision.get("signal_grade", "A+" if notify else "A"),
-                "strategy_tier": decision.get("strategy_tier", "TOP" if setup_name in TOP_SETUPS else "STD"),
-                "decision_reason": decision["decision_reason"],
-                "regime": regime.regime.value,
-                "regime_summary": regime.summary,
-                "trend_direction": regime.trend_direction,
-                "sl_basis": result.sl_basis,
-                "chart_timeframe": ENTRY_TF if scalp_tight else STRUCTURE_TF,
-                "entry_timeframe": ENTRY_TF,
-                "validity_points": [
-                    f"{'Momentum' if scalp_tight else 'Strategy'}: {setup_name.replace('_', ' ').title()} — {result.reason}",
-                    f"Entry TF: {ENTRY_TF} · max hold {hold_m} min",
-                    f"Market: {regime.summary} · trend {regime.trend_direction}",
-                    f"Trade decision: {decision['decision_reason']}",
-                    f"Risk:Reward {round(plan.risk_reward, 2)} to T1 (quick scalp)",
-                    f"Confidence: {confidence}% — {'A+ NOTIFY' if notify else 'A quality scalp'}",
-                    f"SL basis: {result.sl_basis}",
-                    f"Leverage: {plan.leverage}x · Risk ₹{settings.risk_per_trade_inr:.0f} · Target ₹{settings.scalp_target_inr:.0f}+",
-                    f"24h move: {sym.change_pct_24h:+.1f}% · Funding: {round(funding, 4)}% · {sym.category.upper()}",
-                ],
-                "volume_24h": sym.volume_24h_usdt,
-                "change_pct_24h": sym.change_pct_24h,
-                "abs_change_pct_24h": sym.abs_change_pct_24h,
-                "category": sym.category,
-                "tier": sym.tier,
-                "status": "LIVE",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "funding_rate_pct": round(funding, 4),
-                "max_loss_inr": round(plan.max_loss_usdt * settings.usdt_to_inr, 0),
-                "target_pnl_inr": round(plan.target_profit_usdt * settings.usdt_to_inr, 0),
-                "target_profit_inr": round(plan.target_profit_usdt * settings.usdt_to_inr, 0),
-                "margin_inr": round(plan.margin_usdt * settings.usdt_to_inr, 0),
-                "notional_inr": round(plan.notional_usdt * settings.usdt_to_inr, 0),
-                "position_inr": round(plan.margin_usdt * settings.usdt_to_inr * plan.leverage, 0),
-                "capital_inr": settings.crypto_capital_inr,
-                "risk_per_trade_inr": settings.risk_per_trade_inr,
-                "spread_warning": sym.spread_pct > 0.1,
-                "trading_style": settings.trading_style,
-            })
-            results.append(signal)
+                confidence = decision["take_confidence"]
+                min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
+                if confidence <= min_conf:
+                    continue
+                notify = confidence >= settings.notify_min_confidence or (
+                    decision.get("strategy_tier") == "TOP" and confidence >= 78 and plan.risk_reward >= settings.min_rr_for_take
+                )
+                rr_label = "1:1" if plan.risk_reward >= 0.95 else f"1:{plan.risk_reward:.1f}"
+
+                signal = plan.to_dict()
+                hold_m = settings.scalp_holding_minutes
+                scalp_label = "Buy dip" if result.direction == "bullish" else "Sell top"
+                signal.update({
+                    "setup": setup_name,
+                    "confidence": confidence,
+                    "notify": notify,
+                    "rr_label": rr_label,
+                    "signal_grade": decision.get("signal_grade", "A+" if notify else "A"),
+                    "strategy_tier": decision.get("strategy_tier", "TOP" if setup_name in TOP_SETUPS else "STD"),
+                    "decision_reason": decision["decision_reason"],
+                    "regime": regime.regime.value,
+                    "regime_summary": regime.summary,
+                    "trend_direction": regime.trend_direction,
+                    "sl_basis": result.sl_basis,
+                    "chart_timeframe": ENTRY_TF,
+                    "entry_timeframe": ENTRY_TF,
+                    "validity_points": [
+                        f"1m {scalp_label}: {result.reason}",
+                        f"Entry TF: {ENTRY_TF} · max hold {hold_m} min · scan every 1m",
+                        f"Market: {regime.summary} · 24h {sym.change_pct_24h:+.1f}%",
+                        f"Trade decision: {decision['decision_reason']}",
+                        f"Risk:Reward {round(plan.risk_reward, 2)} to T1 (quick scalp)",
+                        f"Confidence: {confidence}% — {'A+ NOTIFY' if notify else 'A quality scalp'}",
+                        f"SL basis: {result.sl_basis}",
+                        f"Leverage: {plan.leverage}x · Risk ₹{settings.risk_per_trade_inr:.0f} · Target ₹{settings.scalp_target_inr:.0f}+",
+                        f"Fast mover · Funding: {round(funding, 4)}% · {sym.category.upper()}",
+                    ],
+                    "volume_24h": sym.volume_24h_usdt,
+                    "change_pct_24h": sym.change_pct_24h,
+                    "abs_change_pct_24h": sym.abs_change_pct_24h,
+                    "category": sym.category,
+                    "tier": sym.tier,
+                    "status": "LIVE",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "funding_rate_pct": round(funding, 4),
+                    "max_loss_inr": round(plan.max_loss_usdt * settings.usdt_to_inr, 0),
+                    "target_pnl_inr": round(plan.target_profit_usdt * settings.usdt_to_inr, 0),
+                    "target_profit_inr": round(plan.target_profit_usdt * settings.usdt_to_inr, 0),
+                    "margin_inr": round(plan.margin_usdt * settings.usdt_to_inr, 0),
+                    "notional_inr": round(plan.notional_usdt * settings.usdt_to_inr, 0),
+                    "position_inr": round(plan.margin_usdt * settings.usdt_to_inr * plan.leverage, 0),
+                    "capital_inr": settings.crypto_capital_inr,
+                    "risk_per_trade_inr": settings.risk_per_trade_inr,
+                    "spread_warning": sym.spread_pct > 0.1,
+                    "trading_style": settings.trading_style,
+                })
+                results.append(signal)
 
         if not results:
             return []
 
-        max_per_sym = 1 if sym.category in ("meme", "mover") else (3 if sym.pair in FOCUS_PAIRS else 2)
+        max_per_sym = 2 if sym.category in ("meme", "mover") else (3 if sym.pair in FOCUS_PAIRS else 2)
 
         def _top_setups(items: list[dict], limit: int) -> list[dict]:
             if not items:
@@ -516,10 +521,10 @@ class CryptoScanner:
             seen: set[str] = set()
             out: list[dict] = []
             for item in items:
-                setup = item.get("setup", "")
-                if setup in seen:
+                key = f"{item.get('setup')}:{item.get('direction')}"
+                if key in seen:
                     continue
-                seen.add(setup)
+                seen.add(key)
                 out.append(item)
                 if len(out) >= limit:
                     break

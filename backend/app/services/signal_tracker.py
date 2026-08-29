@@ -266,7 +266,7 @@ def save_signal(signal: dict) -> int | None:
             )
         )
         if existing:
-            return existing
+            return None
 
         trade = SignalTrade(
             symbol=signal.get("symbol", ""),

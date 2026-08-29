@@ -288,17 +288,17 @@ class _DailyGoalBanner extends StatelessWidget {
             const Text('ScalpTrack Live', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.text, fontSize: 20)),
           const SizedBox(height: 4),
           Text(
-            '₹20,000 · ₹200 risk · ₹150+ quick scalp · momentum only · max 10 min hold',
+            '₹20,000 · ₹200 risk · buy dip / sell top · 1m scalp · max 5 min hold',
             style: const TextStyle(fontSize: 11, color: AppColors.accent),
           ),
           const SizedBox(height: 4),
           Text(
-            '40 HIGH priority/day · max 70 · 1:1 R:R · tight SL on 1m movement',
+            '100–150 scalps/day · 25 fast movers · scan every 1m · 1:1 R:R',
             style: const TextStyle(fontSize: 12, color: AppColors.gold, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
-            'Signals today: $takeCount · cap: $takeCap · confidence > 50% shown',
+            'Signals today: $takeCount · cap: $takeCap · confidence > 48% shown',
             style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
           if (lastClosed != null) ...[
@@ -307,7 +307,7 @@ class _DailyGoalBanner extends StatelessWidget {
           ],
           const SizedBox(height: 4),
           Text(
-            'Signals refresh every 5m · prices update every ~1s',
+            'Signals refresh every 1m · prices update every ~1s',
             style: TextStyle(fontSize: 11, color: AppColors.textMuted.withValues(alpha: 0.7)),
           ),
         ],

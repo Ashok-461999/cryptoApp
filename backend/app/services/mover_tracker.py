@@ -13,7 +13,7 @@ from app.signals.indicators import atr_pct
 from app.signals.market_structure import swing_high_low
 from app.signals.regime import detect_regime
 from app.signals.schemas import T1_R
-from app.signals.momentum_scalp import momentum_scalp
+from app.signals.momentum_scalp import SETUP_NAME as DIP_TOP_SETUP, dip_top_scalp
 from app.signals.sl_levels import normalize_stop_loss
 from app.signals.trade_decision import SETUP_PRIORITY, evaluate_trade_decision
 
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 _cache: dict[str, dict] = {}
 
 _SETUP_LABELS = {
+    "dip_top_scalp": "Dip / Top Scalp",
     "momentum_scalp": "Momentum Scalp",
     "order_flow": "Order Flow",
     "liquidity_sweep": "Liquidity Sweep",
@@ -61,12 +62,13 @@ def _best_setup(symbol: str, df, regime, category: str, change_24h: float = 0.0)
 
     if len(candles_1m) >= 8:
         df_1m = futures_client.candles_to_df(candles_1m)
-        result = momentum_scalp(df_1m, change_24h)
-        if result.fired and result.stop_loss:
-            decision = evaluate_trade_decision("momentum_scalp", result, regime, category)
+        hits = dip_top_scalp(df_1m, change_24h)
+        if hits:
+            result = hits[0]
+            decision = evaluate_trade_decision(DIP_TOP_SETUP, result, regime, category)
             if decision["can_take"]:
-                return "momentum_scalp", {
-                    "setup": "momentum_scalp",
+                return DIP_TOP_SETUP, {
+                    "setup": DIP_TOP_SETUP,
                     "confidence": decision["take_confidence"],
                     "direction": "LONG" if result.direction == "bullish" else "SHORT",
                     "proposed_stop": float(result.stop_loss),

@@ -10,7 +10,7 @@ class UserProfile {
     this.name = 'Trader',
     this.email = '',
     this.experience = 'Scalp Futures',
-    this.goal = 'Scalp ₹150+ per win · 1:1 R:R · 10 min max hold',
+    this.goal = '1m dip/top scalp · 100–150/day · fast movers',
   });
 
   UserProfile copyWith({String? name, String? email, String? experience, String? goal}) => UserProfile(
@@ -33,7 +33,7 @@ class UserProfileStore {
       name: p.getString(_kName) ?? 'Trader',
       email: p.getString(_kEmail) ?? '',
       experience: p.getString(_kExp) ?? 'Scalp Futures',
-      goal: p.getString(_kGoal) ?? 'Scalp ₹150+ per win · 1:1 R:R · 10 min max hold',
+      goal: p.getString(_kGoal) ?? '1m dip/top scalp · 100–150/day · fast movers',
     );
   }
 

@@ -189,11 +189,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Text('How to win', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
               SizedBox(height: 8),
               Text(
-                '• Trade only A+ signals (82%+ confidence)\n'
-                '• 10 min max hold — tight SL, bank ₹150+ at T1 (1:1)\n'
-                '• Momentum scalp on top 24h movers only\n'
+                '• 1m scalp: BUY the dip, SELL the top on fast movers\n'
+                '• 100–150 signals/day · 5 min max hold · bank ₹150+ at T1\n'
+                '• Only trade coins with high 24h % move\n'
                 '• Take notification alerts seriously\n'
-                '• Max 3–5 trades/day — quality over quantity',
+                '• Quality over quantity — skip weak setups',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.55),
               ),
             ],

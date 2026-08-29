@@ -35,31 +35,31 @@ class Settings(BaseSettings):
     database_url: str = ""
     sqlite_path: str = "./data/cryptoapp.db"
 
-    # Signal limits — 60–70/day total, 40 highlighted HIGH priority
-    max_take_signals_per_day: int = 70
-    max_high_priority_signals_per_day: int = 40
-    max_signals_per_scan: int = 15
-    high_priority_min_confidence: int = 85
+    # Signal limits — high-frequency 1m dip/top scalp on fast movers
+    max_take_signals_per_day: int = 150
+    max_high_priority_signals_per_day: int = 60
+    max_signals_per_scan: int = 30
+    high_priority_min_confidence: int = 80
     high_priority_min_rr: float = 1.0
     history_retention_days: int = 7
-    top_mover_scan_count: int = 15  # top 10–15 Binance 24h % movers (Markets tab)
-    top_mover_scan_min: int = 10
+    top_mover_scan_count: int = 25  # more fast-move coins for 1m scalp
+    top_mover_scan_min: int = 15
     mover_refresh_hours: int = 3  # re-fetch 24h % leaders every 3 hours
     mover_levels_refresh_minutes: int = 12  # Entry/SL/TP1 valid ~12m then refresh
-    top_meme_scan_count: int = 15  # alias kept for compat
+    top_meme_scan_count: int = 25  # alias kept for compat
     scan_24h_movers_only: bool = True  # only trade highest 24h move % coins
-    scalp_min_confidence: int = 65
-    live_min_confidence: int = 50
-    normal_min_confidence: int = 50  # emit signals when confidence > 50%
-    notify_min_confidence: int = 72
-    signal_cooldown_minutes: int = 10
-    scalp_holding_minutes: int = 10  # max 10 min hold — exit at market if no T1
+    scalp_min_confidence: int = 60
+    live_min_confidence: int = 48
+    normal_min_confidence: int = 48  # more 1m dip/top signals
+    notify_min_confidence: int = 70
+    signal_cooldown_minutes: int = 2  # re-enter same coin after 2 min
+    scalp_holding_minutes: int = 5  # 1m scalp — exit within 5 min if no T1
     prioritize_meme_coins: bool = True
-    mover_min_confidence: int = 50  # top 24h movers
-    meme_min_confidence: int = 50
+    mover_min_confidence: int = 48  # top 24h movers
+    meme_min_confidence: int = 48
     min_win_close_inr: float = 80.0  # count small scalp wins on timeout exit
     mover_min_volume_usdt: float = 1_500_000.0  # include volatile memes like Binance Markets tab
-    mover_min_change_pct: float = 5.0  # floor only — we always take top 10–15 by |24h %|
+    mover_min_change_pct: float = 2.5  # fast movers only — floor for |24h %|
 
     # Safety
     crypto_paper_trading: bool = False  # live signals — user chooses which to take
@@ -68,8 +68,8 @@ class Settings(BaseSettings):
     max_spread_pct: float = 0.10
     max_funding_rate_pct: float = 0.08
 
-    # Scanner — every 2 minutes for scalp on 24h movers
-    scan_interval_seconds: int = 120
+    # Scanner — every 1 minute for 1m dip/top scalp
+    scan_interval_seconds: int = 60
 
     # Auto-disable setups that keep losing (aggressive)
     setup_disable_min_trades: int = 3

@@ -15,6 +15,7 @@ PERMANENTLY_DISABLED_SETUPS = frozenset({
 
 # Best scalp setups — highlighted when HIGH priority
 TOP_SETUPS = frozenset({
+    "dip_top_scalp",
     "momentum_scalp",
     "order_flow",
     "anchored_vwap",
@@ -23,6 +24,7 @@ TOP_SETUPS = frozenset({
 })
 # All active strategy types — emit NORMAL signals when setup fires
 ACTIVE_SETUPS = frozenset({
+    "dip_top_scalp",
     "momentum_scalp",
     "order_flow",
     "anchored_vwap",
@@ -46,6 +48,7 @@ TREND_FOLLOW_SETUPS = frozenset({
 })
 
 SETUP_PRIORITY = {
+    "dip_top_scalp": 0,
     "momentum_scalp": 0,
     "order_flow": 1,
     "anchored_vwap": 2,
@@ -103,6 +106,7 @@ def compute_take_confidence(
         score -= 8
 
     setup_bonus = {
+        "dip_top_scalp": 22,
         "momentum_scalp": 20,
         "order_flow": 18,
         "anchored_vwap": 15,
@@ -152,7 +156,7 @@ def evaluate_trade_decision(
     min_rr = settings.min_rr_for_take
     rr = result.risk_reward or 0.0
 
-    if setup_name == "momentum_scalp":
+    if setup_name in ("dip_top_scalp", "momentum_scalp"):
         confidence = compute_take_confidence(setup_name, result, regime, category)
         min_conf = settings.mover_min_confidence if category in ("meme", "mover") else settings.normal_min_confidence
         if confidence <= min_conf:
@@ -176,7 +180,7 @@ def evaluate_trade_decision(
             "take_confidence": confidence,
             "strategy_tier": "TOP",
             "signal_grade": "A+" if confidence >= settings.scalp_min_confidence else "A",
-            "decision_reason": f"momentum scalp — {result.reason}",
+            "decision_reason": f"1m dip/top scalp — {result.reason}",
         }
 
     if setup_name in PERMANENTLY_DISABLED_SETUPS:
