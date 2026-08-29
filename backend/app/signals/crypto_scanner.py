@@ -20,6 +20,7 @@ from app.services.binance_account import (
 from app.services.crypto_futures_client import futures_client
 from app.services.crypto_watchlist import WatchlistSymbol, get_scan_symbol_order, get_top_24h_movers, get_watchlist, refresh_watchlist
 from app.services.signal_tracker import enrich_live_signals, mark_user_taken, save_signal
+from app.services.trade_analytics import get_disabled_setups
 from app.services.trading_fees import estimated_entry_drag_usdt, round_trip_fee_usdt, tp_price_from_rr
 from app.signals.indicators import atr_pct
 from app.signals.market_structure import swing_high_low
