@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-T1_R = 3.0   # 1:3 R:R — ₹600 scalp win on ₹200 risk
-T2_R = 4.0   # optional runner (~₹800)
+T1_R = 1.0   # 1:1 quick scalp — bank at first target
+T2_R = 1.5   # optional small runner
 
 
 @dataclass

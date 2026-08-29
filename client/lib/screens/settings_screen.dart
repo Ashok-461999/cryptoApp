@@ -190,8 +190,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               SizedBox(height: 8),
               Text(
                 '• Trade only A+ signals (82%+ confidence)\n'
-                '• Stick to 1:3 R:R — risk ₹200, target ₹600+\n'
-                '• Use chart zoom on BTC to confirm entry\n'
+                '• 10 min max hold — tight SL, bank ₹150+ at T1 (1:1)\n'
+                '• Momentum scalp on top 24h movers only\n'
                 '• Take notification alerts seriously\n'
                 '• Max 3–5 trades/day — quality over quantity',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.55),

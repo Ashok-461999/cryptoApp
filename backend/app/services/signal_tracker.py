@@ -413,7 +413,7 @@ def _notify_trades_closed(closed: list[dict]) -> None:
 
 
 def _close_at_market(t: SignalTrade, price: float, settings) -> dict:
-    """Timeout exit — only count WIN if ₹400+ target met."""
+    """Timeout exit after max hold — bank any profit; only full target if ₹min_win+."""
     unrealized = _compute_unrealized_pnl(t, price)
     unrealized_inr = unrealized * settings.usdt_to_inr
     min_win = float(getattr(settings, "min_win_close_inr", 0) or settings.take_profit_inr)
@@ -424,17 +424,22 @@ def _close_at_market(t: SignalTrade, price: float, settings) -> dict:
             "pnl_usdt": round(unrealized, 2),
             "close_reason": "PROFIT_TARGET",
         }
+    if unrealized_inr > 0:
+        return {
+            "status": "WIN",
+            "pnl_usdt": round(unrealized, 2),
+            "close_reason": "TIMEOUT_SCALP_WIN",
+        }
     if unrealized < 0:
         return {
             "status": "LOSS",
             "pnl_usdt": round(unrealized, 2),
             "close_reason": "TIMEOUT_LOSS",
         }
-    # Small profit below ₹400 — not a real win
     return {
         "status": "LOSS",
-        "pnl_usdt": round(unrealized, 2),
-        "close_reason": "TIMEOUT_BELOW_TARGET",
+        "pnl_usdt": 0.0,
+        "close_reason": "TIMEOUT_FLAT",
     }
 
 

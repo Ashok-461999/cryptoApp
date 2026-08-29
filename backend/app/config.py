@@ -15,11 +15,11 @@ class Settings(BaseSettings):
     max_deploy_pct: float = 40.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"
-    min_rr_for_take: float = 3.0  # 1:3 — ₹200 risk → ₹600+ scalp win at T1
-    normal_min_rr: float = 2.0  # NORMAL tier can show 1:2 setups
-    target_profit_inr_min: float = 600.0
-    take_profit_inr: float = 600.0  # auto-close WIN when live PnL ≥ ₹600
-    scalp_target_inr: float = 600.0  # primary scalp bank target
+    min_rr_for_take: float = 1.0  # 1:1 quick scalp — bank at T1, no 1:3 wait
+    normal_min_rr: float = 0.9  # movement scalp — tight SL, near 1:1
+    target_profit_inr_min: float = 120.0
+    take_profit_inr: float = 150.0  # auto-close WIN when live PnL ≥ ₹150
+    scalp_target_inr: float = 150.0  # quick scalp bank target
     leverage_min: int = 25
     leverage_max: int = 40
 
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     max_high_priority_signals_per_day: int = 40
     max_signals_per_scan: int = 15
     high_priority_min_confidence: int = 85
-    high_priority_min_rr: float = 3.0
+    high_priority_min_rr: float = 1.0
     history_retention_days: int = 7
     top_mover_scan_count: int = 15  # top 10–15 Binance 24h % movers (Markets tab)
     top_mover_scan_min: int = 10
@@ -53,11 +53,11 @@ class Settings(BaseSettings):
     normal_min_confidence: int = 50  # emit signals when confidence > 50%
     notify_min_confidence: int = 72
     signal_cooldown_minutes: int = 10
-    scalp_holding_minutes: int = 45  # quick scalp — exit if no ₹600 in 45 min
+    scalp_holding_minutes: int = 10  # max 10 min hold — exit at market if no T1
     prioritize_meme_coins: bool = True
     mover_min_confidence: int = 50  # top 24h movers
     meme_min_confidence: int = 50
-    min_win_close_inr: float = 600.0  # no WIN below ₹600 (blocks small noise)
+    min_win_close_inr: float = 80.0  # count small scalp wins on timeout exit
     mover_min_volume_usdt: float = 1_500_000.0  # include volatile memes like Binance Markets tab
     mover_min_change_pct: float = 5.0  # floor only — we always take top 10–15 by |24h %|
 

@@ -22,8 +22,10 @@ MIN_LEVERAGE = 25
 
 # SL distance limits (% of entry)
 SL_MIN_PCT = 0.6
+SL_MIN_PCT_SCALP = 0.18
 SL_MAX_PCT_MAJORS = 2.5
 SL_MAX_PCT_MEME = 5.0
+SL_MAX_PCT_SCALP = 0.55
 
 
 @dataclass
@@ -131,13 +133,19 @@ def validate_stop_distance(
     entry: float,
     stop: float,
     tier: str,
+    *,
+    scalp_mode: bool = False,
 ) -> tuple[bool, str]:
     if not entry or not stop:
         return False, "Missing entry or stop"
     dist_pct = abs(entry - stop) / entry * 100
-    if dist_pct < SL_MIN_PCT:
-        return False, f"SL too tight ({dist_pct:.2f}% < {SL_MIN_PCT}%)"
-    max_sl = SL_MAX_PCT_MEME if tier == "D" else SL_MAX_PCT_MAJORS
+    min_sl = SL_MIN_PCT_SCALP if scalp_mode else SL_MIN_PCT
+    if dist_pct < min_sl:
+        return False, f"SL too tight ({dist_pct:.2f}% < {min_sl}%)"
+    if scalp_mode:
+        max_sl = SL_MAX_PCT_SCALP
+    else:
+        max_sl = SL_MAX_PCT_MEME if tier == "D" else SL_MAX_PCT_MAJORS
     if dist_pct > max_sl:
         return False, f"SL too wide ({dist_pct:.2f}% > {max_sl}%)"
     return True, "ok"
@@ -178,6 +186,7 @@ def plan_crypto_futures(
     max_deploy_pct: float = 35.0,
     atr_pct: float = 2.0,
     sl_basis: str = "setup_structure",
+    scalp_mode: bool = False,
 ) -> CryptoFuturesPlan:
     """Size a crypto futures trade with strict SL and auto leverage."""
     direction = direction.upper()
@@ -190,7 +199,7 @@ def plan_crypto_futures(
     if not stop_loss or stop_loss <= 0:
         return _failed_plan(pair, direction, entry, "NO_TRADE — stop_loss_price missing")
 
-    sl_ok, sl_reason = validate_stop_distance(entry, stop_loss, tier)
+    sl_ok, sl_reason = validate_stop_distance(entry, stop_loss, tier, scalp_mode=scalp_mode)
     if not sl_ok:
         return _failed_plan(pair, direction, entry, f"NO_TRADE — {sl_reason}")
 

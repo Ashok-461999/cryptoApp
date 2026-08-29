@@ -13,7 +13,7 @@ from app.signals.indicators import atr_pct
 from app.signals.market_structure import swing_high_low
 from app.signals.regime import detect_regime
 from app.signals.schemas import T1_R
-from app.signals.setups import SETUP_FUNCTIONS
+from app.signals.momentum_scalp import momentum_scalp
 from app.signals.sl_levels import normalize_stop_loss
 from app.signals.trade_decision import SETUP_PRIORITY, evaluate_trade_decision
 
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 _cache: dict[str, dict] = {}
 
 _SETUP_LABELS = {
+    "momentum_scalp": "Momentum Scalp",
     "order_flow": "Order Flow",
     "liquidity_sweep": "Liquidity Sweep",
     "anchored_vwap": "Anchored VWAP",
@@ -51,7 +52,32 @@ def _cache_valid(symbol: str, force: bool) -> bool:
     return datetime.now(timezone.utc) - at < timedelta(minutes=_ttl_minutes())
 
 
-def _best_setup(df, regime, category: str) -> tuple[str | None, dict | None]:
+def _best_setup(symbol: str, df, regime, category: str, change_24h: float = 0.0) -> tuple[str | None, dict | None]:
+    """Prefer 1m momentum scalp for movers — movement only, no SMC."""
+    try:
+        candles_1m = futures_client.get_futures_candles(symbol, "1m", 30)
+    except Exception:
+        candles_1m = []
+
+    if len(candles_1m) >= 8:
+        df_1m = futures_client.candles_to_df(candles_1m)
+        result = momentum_scalp(df_1m, change_24h)
+        if result.fired and result.stop_loss:
+            decision = evaluate_trade_decision("momentum_scalp", result, regime, category)
+            if decision["can_take"]:
+                return "momentum_scalp", {
+                    "setup": "momentum_scalp",
+                    "confidence": decision["take_confidence"],
+                    "direction": "LONG" if result.direction == "bullish" else "SHORT",
+                    "proposed_stop": float(result.stop_loss),
+                    "reason": result.reason,
+                    "sl_basis": result.sl_basis,
+                    "priority": 0,
+                    "scalp_tight": True,
+                }
+
+    from app.signals.setups import SETUP_FUNCTIONS
+
     best_name: str | None = None
     best: dict | None = None
     for name, fn in SETUP_FUNCTIONS.items():
@@ -114,7 +140,7 @@ def analyze_mover_symbol(sym: WatchlistSymbol, force: bool = False) -> dict:
     atr_val = price * atr_p / 100.0 if atr_p > 0 else price * 0.008
     mid = (swing_high + swing_low) / 2
 
-    setup_name, setup = _best_setup(df, regime, category)
+    setup_name, setup = _best_setup(symbol, df, regime, category, sym.change_pct_24h)
 
     if live:
         direction = (live.get("direction") or "LONG").upper()
@@ -144,6 +170,7 @@ def analyze_mover_symbol(sym: WatchlistSymbol, force: bool = False) -> dict:
             swing_high=swing_high,
             atr=atr_val,
             tier=sym.tier,
+            scalp_tight=bool(setup.get("scalp_tight")),
         )
         risk = abs(entry - sl)
         if risk <= 0:
@@ -176,6 +203,7 @@ def analyze_mover_symbol(sym: WatchlistSymbol, force: bool = False) -> dict:
             swing_high=swing_high,
             atr=atr_val,
             tier=sym.tier,
+            scalp_tight=True,
         )
         risk = abs(entry - sl)
         if risk <= 0:

@@ -288,12 +288,12 @@ class _DailyGoalBanner extends StatelessWidget {
             const Text('ScalpTrack Live', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.text, fontSize: 20)),
           const SizedBox(height: 4),
           Text(
-            '₹20,000 · ₹200 risk · ₹600+ scalp win · all strategies · Order Flow + VWAP',
+            '₹20,000 · ₹200 risk · ₹150+ quick scalp · momentum only · max 10 min hold',
             style: const TextStyle(fontSize: 11, color: AppColors.accent),
           ),
           const SizedBox(height: 4),
           Text(
-            '40 HIGH priority/day · max 70 · 1:3 R:R · NORMAL = all strategy signals',
+            '40 HIGH priority/day · max 70 · 1:1 R:R · tight SL on 1m movement',
             style: const TextStyle(fontSize: 12, color: AppColors.gold, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
@@ -474,7 +474,7 @@ class _CryptoSignalCardState extends ConsumerState<_CryptoSignalCard> {
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                         decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(6)),
                         child: Text(
-                          signal.riskReward >= 2.9 ? 'A+ 1:3' : (signal.riskReward >= 1.9 ? 'A+ 1:2' : 'A+ 1:1'),
+                          signal.riskReward >= 0.95 ? 'A+ 1:1' : 'SCALP',
                           style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.bg),
                         ),
                       ),

@@ -41,9 +41,9 @@ def get_trading_settings():
         "exchange": "Binance USDT Perpetual",
         "trading_style": s.trading_style,
         "why_this_trade": (
-            f"Scalp mode: top {s.top_mover_scan_count} Binance 24h % movers only. "
-            f"Risk ₹{s.risk_per_trade_inr:.0f} · bank ₹{s.scalp_target_inr:.0f}+ per win (1:3). "
-            f"Best setups: Order Flow, Liquidity Sweep, VWAP, Volume Profile. "
+            f"10-min momentum scalp on top {s.top_mover_scan_count} Binance 24h % movers. "
+            f"Risk ₹{s.risk_per_trade_inr:.0f} · tight SL · bank ₹{s.scalp_target_inr:.0f}+ at T1 (1:1). "
+            f"Movement-only entries — no liquidity sweep. "
             f"Auto bank at ₹{s.take_profit_inr:.0f}+ live PnL."
         ),
     }

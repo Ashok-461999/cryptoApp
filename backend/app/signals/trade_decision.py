@@ -4,26 +4,27 @@ from app.config import get_settings
 from app.signals.regime import Regime, RegimeSnapshot, setup_allowed_in_regime
 from app.signals.schemas import SetupResult
 
-MIN_RR_SCALP = 3.0
+MIN_RR_SCALP = 1.0
 
 # Permanently blocked — proven poor performers in live tracking
 PERMANENTLY_DISABLED_SETUPS = frozenset({
     "fvg_retest",
     "orb_breakout",
+    "liquidity_sweep",
 })
 
 # Best scalp setups — highlighted when HIGH priority
 TOP_SETUPS = frozenset({
+    "momentum_scalp",
     "order_flow",
-    "liquidity_sweep",
     "anchored_vwap",
     "volume_profile",
     "ifvg_reversal",
 })
 # All active strategy types — emit NORMAL signals when setup fires
 ACTIVE_SETUPS = frozenset({
+    "momentum_scalp",
     "order_flow",
-    "liquidity_sweep",
     "anchored_vwap",
     "volume_profile",
     "ifvg_reversal",
@@ -45,8 +46,8 @@ TREND_FOLLOW_SETUPS = frozenset({
 })
 
 SETUP_PRIORITY = {
-    "order_flow": 0,
-    "liquidity_sweep": 1,
+    "momentum_scalp": 0,
+    "order_flow": 1,
     "anchored_vwap": 2,
     "volume_profile": 3,
     "ifvg_reversal": 4,
@@ -57,6 +58,7 @@ SETUP_PRIORITY = {
     "fibonacci_retrace": 9,
     "structure_reversal": 10,
     "orb_breakout": 11,
+    "liquidity_sweep": 99,
 }
 
 
@@ -91,18 +93,18 @@ def compute_take_confidence(
     elif regime.regime == Regime.VOLATILE:
         score += 4
 
-    if rr >= 3.0:
-        score += 15
+    if rr >= 2.0:
+        score += 12
     elif rr >= min_rr:
         score += 10
     elif rr >= settings.normal_min_rr:
-        score += 4
+        score += 6
     else:
-        score -= 12
+        score -= 8
 
     setup_bonus = {
+        "momentum_scalp": 20,
         "order_flow": 18,
-        "liquidity_sweep": 16,
         "anchored_vwap": 15,
         "volume_profile": 15,
         "ifvg_reversal": 12,
@@ -112,6 +114,7 @@ def compute_take_confidence(
         "fvg_retest": 0,
         "fibonacci_retrace": 4,
         "structure_reversal": 2,
+        "liquidity_sweep": -10,
     }
     score += setup_bonus.get(setup_name, 0)
 
@@ -148,6 +151,33 @@ def evaluate_trade_decision(
     min_conf = settings.scalp_min_confidence
     min_rr = settings.min_rr_for_take
     rr = result.risk_reward or 0.0
+
+    if setup_name == "momentum_scalp":
+        confidence = compute_take_confidence(setup_name, result, regime, category)
+        min_conf = settings.mover_min_confidence if category in ("meme", "mover") else settings.normal_min_confidence
+        if confidence <= min_conf:
+            return {
+                "trade_decision": "NO_TRADE",
+                "can_take": False,
+                "take_confidence": confidence,
+                "decision_reason": f"Confidence {confidence}% below {min_conf}%",
+            }
+        rr = result.risk_reward or 0.0
+        if rr < settings.normal_min_rr:
+            return {
+                "trade_decision": "NO_TRADE",
+                "can_take": False,
+                "take_confidence": confidence,
+                "decision_reason": f"R:R {rr:.2f} below {settings.normal_min_rr}",
+            }
+        return {
+            "trade_decision": "TAKE",
+            "can_take": True,
+            "take_confidence": confidence,
+            "strategy_tier": "TOP",
+            "signal_grade": "A+" if confidence >= settings.scalp_min_confidence else "A",
+            "decision_reason": f"momentum scalp — {result.reason}",
+        }
 
     if setup_name in PERMANENTLY_DISABLED_SETUPS:
         return {

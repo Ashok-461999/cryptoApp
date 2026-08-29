@@ -185,9 +185,8 @@ class CryptoSignal {
 
   String get displayPriorityLabel {
     if (priorityLabel.isNotEmpty) return priorityLabel;
-    if (riskReward >= 2.9) return 'A+ 1:3';
-    if (riskReward >= 1.9) return 'A+ 1:2';
-    if (notify || confidence >= 82) return 'A+ 1:1';
+    if (riskReward >= 0.95) return 'A+ 1:1';
+    if (notify || confidence >= 82) return 'SCALP';
     return '';
   }
 
