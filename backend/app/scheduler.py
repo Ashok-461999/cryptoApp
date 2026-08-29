@@ -38,6 +38,10 @@ def _run_reconcile():
         closed = reconcile_open_trades()
         if closed:
             logger.info("Reconciled %d trades (WIN/LOSS)", len(closed))
+        from app.services.trade_executor import cleanup_orphan_exchange_orders
+        n = cleanup_orphan_exchange_orders()
+        if n:
+            logger.info("Cancelled %d orphan conditional orders", n)
     except Exception:
         logger.exception("Trade reconcile failed")
 

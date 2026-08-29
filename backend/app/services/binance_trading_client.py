@@ -330,16 +330,76 @@ class BinanceTradingClient:
             ),
         )
 
+    def list_open_algo_orders(self, symbol: str | None = None) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        if symbol:
+            params["symbol"] = normalize_pair(symbol)
+        try:
+            rows = self._request("GET", "/fapi/v1/openAlgoOrders", params)
+            return rows if isinstance(rows, list) else []
+        except BinanceTradingError as exc:
+            logger.warning("list openAlgoOrders failed: %s", exc)
+            return []
+
+    def cancel_algo_order(self, algo_id: int | str | None) -> None:
+        if not algo_id:
+            return
+        try:
+            self._request("DELETE", "/fapi/v1/algoOrder", {"algoId": int(algo_id)})
+        except BinanceTradingError as exc:
+            if exc.code in (-2011, -2022, -4045):
+                return
+            logger.warning("cancel algo %s: %s", algo_id, exc)
+
+    def cancel_bracket_orders(
+        self,
+        symbol: str,
+        *,
+        sl_algo_id: int | str | None = None,
+        tp_algo_id: int | str | None = None,
+    ) -> None:
+        """Cancel conditional SL/TP algo orders immediately (by id + symbol sweep)."""
+        self.cancel_algo_order(sl_algo_id)
+        self.cancel_algo_order(tp_algo_id)
+        self.cancel_all_orders(symbol)
+
     def cancel_all_orders(self, symbol: str) -> None:
         pair = normalize_pair(symbol)
         try:
             self._request("DELETE", "/fapi/v1/allOpenOrders", {"symbol": pair})
         except BinanceTradingError as exc:
             logger.warning("Cancel orders %s: %s", pair, exc)
+        for order in self.list_open_algo_orders(pair):
+            self.cancel_algo_order(order.get("algoId"))
         try:
             self._request("DELETE", "/fapi/v1/algoOpenOrders", {"symbol": pair})
         except BinanceTradingError as exc:
             logger.warning("Cancel algo orders %s: %s", pair, exc)
+
+    def cancel_all_algo_orders_global(self) -> int:
+        """Cancel every open conditional order on the account."""
+        count = 0
+        for order in self.list_open_algo_orders():
+            aid = order.get("algoId")
+            if aid:
+                self.cancel_algo_order(aid)
+                count += 1
+        return count
+
+    def flatten_all_positions(self) -> int:
+        """Market-close every open futures position."""
+        closed = 0
+        rows = self._request("GET", "/fapi/v2/positionRisk")
+        for row in rows:
+            amt = float(row.get("positionAmt") or 0)
+            if abs(amt) < 1e-12:
+                continue
+            sym = row.get("symbol", "")
+            if sym:
+                self.cancel_all_orders(sym)
+                if self.close_position_market(sym):
+                    closed += 1
+        return closed
 
     def close_position_market(self, symbol: str) -> dict[str, Any] | None:
         pair = normalize_pair(symbol)

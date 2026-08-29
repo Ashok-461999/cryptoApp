@@ -121,6 +121,14 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
             )
             fill_qty = float(entry_order.get("executedQty") or quantity)
             fill_price = float(entry_order.get("avgPrice") or entry_order.get("price") or signal.get("entry_price") or 0)
+            payload.update({
+                "exchange_entry_filled": True,
+                "binance_entry_order_id": entry_order.get("orderId"),
+                "actual_fill_price": fill_price,
+                "actual_quantity": fill_qty,
+            })
+            _save_payload(trade, payload)
+            session.commit()
 
             sl_order = binance_trading.place_stop_market(
                 symbol, exit_side, sl, fill_qty, position_side=position_side
@@ -156,7 +164,11 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
             session.commit()
             logger.exception("Exchange execute failed trade #%s", trade_id)
             try:
-                binance_trading.cancel_all_orders(symbol)
+                binance_trading.cancel_bracket_orders(
+                    symbol,
+                    sl_algo_id=payload.get("binance_sl_order_id"),
+                    tp_algo_id=payload.get("binance_tp_order_id"),
+                )
                 binance_trading.close_position_market(symbol)
             except Exception:
                 logger.exception("Failed to unwind position after execute error for %s", symbol)
@@ -165,28 +177,41 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
         session.close()
 
 
-def close_exchange_trade(trade_id: int, reason: str = "APP_CLOSE") -> dict:
-    """Market-close Binance position and cancel bracket orders (timeout / manual)."""
+def _had_exchange_activity(payload: dict) -> bool:
+    return bool(
+        payload.get("executed_on_exchange")
+        or payload.get("exchange_entry_filled")
+        or payload.get("binance_entry_order_id")
+    )
+
+
+def sync_exchange_on_close(trade_id: int, close_reason: str) -> dict:
+    """Always cancel conditional SL/TP and close any leftover position."""
     session = get_session()
     try:
         trade = session.get(SignalTrade, trade_id)
         if not trade:
             return {"ok": False, "reason": "trade not found"}
         payload = _payload(trade)
-        if not payload.get("executed_on_exchange"):
+        if not _had_exchange_activity(payload):
             return {"ok": False, "reason": "not on exchange"}
 
         symbol = trade.symbol
         try:
-            binance_trading.cancel_all_orders(symbol)
+            binance_trading.cancel_bracket_orders(
+                symbol,
+                sl_algo_id=payload.get("binance_sl_order_id"),
+                tp_algo_id=payload.get("binance_tp_order_id"),
+            )
             close_order = binance_trading.close_position_market(symbol)
             payload["exchange_closed_at"] = datetime.now(timezone.utc).isoformat()
-            payload["exchange_close_reason"] = reason
+            payload["exchange_close_reason"] = close_reason
+            payload["exchange_brackets_cancelled"] = True
             if close_order:
                 payload["binance_close_order_id"] = close_order.get("orderId")
             _save_payload(trade, payload)
             session.commit()
-            logger.info("Exchange CLOSE %s reason=%s", symbol, reason)
+            logger.info("Exchange SYNC CLOSE %s reason=%s", symbol, close_reason)
             return {"ok": True, "close_order_id": (close_order or {}).get("orderId")}
         except BinanceTradingError as exc:
             payload["exchange_close_error"] = str(exc)
@@ -197,8 +222,52 @@ def close_exchange_trade(trade_id: int, reason: str = "APP_CLOSE") -> dict:
         session.close()
 
 
+def emergency_flatten_exchange() -> dict:
+    """Cancel all conditional orders and close all positions (pause / safety)."""
+    if not binance_trading.is_configured():
+        return {"ok": False, "reason": "not configured"}
+    algos = binance_trading.cancel_all_algo_orders_global()
+    positions = binance_trading.flatten_all_positions()
+    logger.warning("Emergency flatten: cancelled %d algos, closed %d positions", algos, positions)
+    return {"ok": True, "algos_cancelled": algos, "positions_closed": positions}
+
+
+def cleanup_orphan_exchange_orders() -> int:
+    """Cancel conditional orders left after app-side closes."""
+    if not binance_trading.is_configured():
+        return 0
+    session = get_session()
+    try:
+        open_trades = session.scalars(
+            select(SignalTrade).where(SignalTrade.status == "OPEN")
+        ).all()
+        open_symbols = {t.symbol for t in open_trades}
+        open_algo_ids = set()
+        for t in open_trades:
+            p = _payload(t)
+            for key in ("binance_sl_order_id", "binance_tp_order_id"):
+                if p.get(key):
+                    open_algo_ids.add(int(p[key]))
+    finally:
+        session.close()
+
+    cancelled = 0
+    for order in binance_trading.list_open_algo_orders():
+        sym = order.get("symbol", "")
+        aid = order.get("algoId")
+        if sym in open_symbols and aid in open_algo_ids:
+            continue
+        if aid:
+            binance_trading.cancel_algo_order(aid)
+            cancelled += 1
+    return cancelled
+
+
+def close_exchange_trade(trade_id: int, reason: str = "APP_CLOSE") -> dict:
+    """Market-close Binance position and cancel bracket orders."""
+    return sync_exchange_on_close(trade_id, reason)
+
+
 def on_trade_closed(trade_id: int, close_reason: str) -> None:
-    """After reference trade closes — sync exchange if SL/TP didn't fill yet."""
-    if close_reason in ("SL_HIT", "T1_HIT", "T2_HIT", "PROFIT_TARGET"):
-        return
-    close_exchange_trade(trade_id, close_reason)
+    """Always cancel conditional SL/TP on Binance when app closes a trade."""
+    sync_exchange_on_close(trade_id, close_reason)

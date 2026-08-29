@@ -55,6 +55,13 @@ def set_trading_paused(paused: bool, *, by: str = "app") -> dict:
         state["resumed_at"] = now
     _write_state(state)
     logger.info("Trading %s by %s", "PAUSED" if paused else "STARTED", by)
+    if paused:
+        try:
+            from app.services.trade_executor import emergency_flatten_exchange
+            result = emergency_flatten_exchange()
+            logger.info("Pause flatten result: %s", result)
+        except Exception:
+            logger.exception("Emergency flatten on pause failed")
     return get_trading_status()
 
 
