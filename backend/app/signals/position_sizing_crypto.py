@@ -18,7 +18,7 @@ TIER_B_MEME = frozenset({
 
 TIER_DEFAULT_LEV = {"A": 40, "B": 35, "C": 30, "D": 35}
 TIER_MAX_LEV = {"A": 40, "B": 40, "C": 35, "D": 40}
-MIN_LEVERAGE = 25
+MIN_LEVERAGE = 5
 
 # SL distance limits (% of entry)
 SL_MIN_PCT = 0.6
@@ -159,6 +159,8 @@ def suggest_leverage(
     entry: float,
     stop: float,
     direction: str,
+    *,
+    max_leverage_cap: int | None = None,
 ) -> int:
     base = TIER_DEFAULT_LEV.get(tier, 40)
     if atr_pct > 5.0:
@@ -168,6 +170,8 @@ def suggest_leverage(
     if stop_distance_pct > 3.0:
         base = min(base, 40)
     max_lev = TIER_MAX_LEV.get(tier, 50)
+    if max_leverage_cap is not None:
+        max_lev = min(max_lev, max_leverage_cap)
     lev = min(max(base, MIN_LEVERAGE), max_lev)
     while lev > MIN_LEVERAGE and liquidation_too_close(entry, stop, lev, direction):
         lev -= 1
@@ -187,6 +191,11 @@ def plan_crypto_futures(
     atr_pct: float = 2.0,
     sl_basis: str = "setup_structure",
     scalp_mode: bool = False,
+    *,
+    risk_usdt: float | None = None,
+    risk_usdt_max: float | None = None,
+    available_usdt: float | None = None,
+    max_leverage_cap: int | None = None,
 ) -> CryptoFuturesPlan:
     """Size a crypto futures trade with strict SL and auto leverage."""
     direction = direction.upper()
@@ -204,10 +213,16 @@ def plan_crypto_futures(
         return _failed_plan(pair, direction, entry, f"NO_TRADE — {sl_reason}")
 
     stop_dist_pct = abs(entry - stop_loss) / entry * 100
-    leverage = suggest_leverage(pair, atr_pct, stop_dist_pct, tier, entry, stop_loss, direction)
+    leverage = suggest_leverage(
+        pair, atr_pct, stop_dist_pct, tier, entry, stop_loss, direction,
+        max_leverage_cap=max_leverage_cap,
+    )
     max_lev = TIER_MAX_LEV.get(tier, 5)
 
-    risk_usdt = capital_usdt * (risk_percent / 100.0)
+    if risk_usdt is None:
+        risk_usdt = capital_usdt * (risk_percent / 100.0)
+    if risk_usdt_max is not None:
+        risk_usdt = min(risk_usdt, risk_usdt_max)
     stop_frac = abs(entry - stop_loss) / entry
     if stop_frac <= 0:
         return _failed_plan(pair, direction, entry, "Invalid stop distance")
@@ -215,25 +230,38 @@ def plan_crypto_futures(
     notional_at_risk = risk_usdt / stop_frac
     margin_required = notional_at_risk / leverage
     max_margin = capital_usdt * (max_deploy_pct / 100.0)
+    if available_usdt is not None:
+        max_margin = min(max_margin, available_usdt * (max_deploy_pct / 100.0))
 
     if margin_required > max_margin:
-        return _failed_plan(
-            pair,
-            direction,
-            entry,
-            f"NO_TRADE — margin ${margin_required:.2f} exceeds max deploy ${max_margin:.2f}",
-        )
+        # Shrink position to fit wallet — keep fixed ₹ risk only if leverage allows
+        margin_required = max_margin
+        notional_usdt = margin_required * leverage
+        max_loss_usdt = notional_usdt * stop_frac
+        if max_loss_usdt > risk_usdt * 1.1:
+            return _failed_plan(
+                pair,
+                direction,
+                entry,
+                f"NO_TRADE — wallet too small for ₹ risk at {leverage}x (need ${margin_required:.2f} margin)",
+            )
+        quantity = notional_usdt / entry if entry > 0 else 0
+    else:
+        quantity = notional_at_risk / entry if entry > 0 else 0
+        notional_usdt = margin_required * leverage
+        max_loss_usdt = notional_usdt * stop_frac if entry > 0 else 0
 
-    quantity = notional_at_risk / entry if entry > 0 else 0
-    notional_usdt = margin_required * leverage
-    stop_dist = abs(entry - stop_loss)
-    target_dist = abs(target_1 - entry)
-    max_loss_usdt = notional_usdt * (stop_dist / entry) if entry > 0 else 0
-    target_profit_usdt = notional_usdt * (target_dist / entry) if entry > 0 else 0
+    if risk_usdt_max is not None and max_loss_usdt > risk_usdt_max * 1.02 and entry > 0:
+        max_loss_usdt = risk_usdt_max
+        notional_usdt = max_loss_usdt / stop_frac
+        margin_required = notional_usdt / leverage
+        quantity = notional_usdt / entry
 
     liq = liquidation_price(entry, leverage, direction)
     liq_dist = abs(entry - liq)
     stop_dist = abs(entry - stop_loss)
+    target_dist = abs(target_1 - entry)
+    target_profit_usdt = notional_usdt * (target_dist / entry) if entry > 0 else 0
     liq_buffer = (liq_dist / stop_dist * 100) if stop_dist > 0 else 0
 
     rr = target_dist / stop_dist if stop_dist > 0 else 0

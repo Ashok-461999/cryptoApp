@@ -40,7 +40,7 @@ def _effective_outcome(t: SignalTrade) -> str | None:
     if t.close_reason in ("TIMEOUT_BELOW_TARGET", "TIMEOUT_PROFIT"):
         pnl = float(t.pnl_inr or 0)
         settings = get_settings()
-        min_win = float(getattr(settings, "min_win_close_inr", 0) or settings.take_profit_inr)
+        min_win = settings.min_win_close_inr
         if pnl >= min_win:
             return "W"
         return "L"

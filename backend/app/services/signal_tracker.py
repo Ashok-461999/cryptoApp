@@ -319,7 +319,7 @@ def _maybe_breakeven(t: SignalTrade, price: float, settings) -> bool:
     if payload.get("breakeven_moved"):
         return False
     unrealized_inr = _compute_unrealized_pnl(t, price) * settings.usdt_to_inr
-    if unrealized_inr < settings.risk_per_trade_inr * 0.5:
+    if unrealized_inr < settings.risk_per_trade_usdt * settings.usdt_to_inr * 0.5:
         return False
     entry = float(t.entry_price or 0)
     if entry <= 0:
@@ -421,9 +421,9 @@ def _close_at_market(t: SignalTrade, price: float, settings) -> dict:
     """Timeout exit after max hold — bank any profit; only full target if ₹min_win+."""
     unrealized = _compute_unrealized_pnl(t, price)
     unrealized_inr = unrealized * settings.usdt_to_inr
-    min_win = float(getattr(settings, "min_win_close_inr", 0) or settings.take_profit_inr)
+    min_win = settings.min_win_close_usdt
 
-    if unrealized_inr >= min_win:
+    if unrealized >= min_win:
         return {
             "status": "WIN",
             "pnl_usdt": round(unrealized, 2),
@@ -456,7 +456,7 @@ def _effective_status(t: SignalTrade) -> str:
     if t.status == "EXPIRED":
         pnl = float(t.pnl_inr or 0)
         settings = get_settings()
-        min_win = float(getattr(settings, "min_win_close_inr", 0) or settings.take_profit_inr)
+        min_win = settings.min_win_close_inr
         if pnl >= min_win:
             return "WIN"
         if pnl < 0:
@@ -526,8 +526,8 @@ def _evaluate_trade(t: SignalTrade, price: float, settings) -> dict | None:
 
     unrealized = _compute_unrealized_pnl(t, price)
     unrealized_inr = unrealized * settings.usdt_to_inr
-    take_profit_inr = float(getattr(settings, "take_profit_inr", 0) or settings.target_profit_inr_min)
-    if unrealized_inr >= take_profit_inr:
+    take_profit_usdt = settings.take_profit_usdt
+    if unrealized >= take_profit_usdt:
         return {
             "status": "WIN",
             "pnl_usdt": round(unrealized, 2),

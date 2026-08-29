@@ -27,10 +27,18 @@ def _trading_payload() -> dict:
         "capital_usdt": float(binance["equity_usdt"]) if binance else round(s.crypto_capital_usdt, 2),
         "capital_source": "binance" if binance else "config",
         "risk_per_trade_inr": s.risk_per_trade_inr,
+        "risk_per_trade_usdt": s.risk_per_trade_usdt,
+        "risk_per_trade_usdt_max": s.risk_per_trade_usdt_max,
         "risk_percent": s.risk_percent,
         "target_profit_inr_min": s.target_profit_inr_min,
         "take_profit_inr": s.take_profit_inr,
-        "target_profit_note": f"Auto bank at ₹{s.take_profit_inr:.0f}+ when profit hits — hold for more upside",
+        "take_profit_usdt": s.take_profit_usdt,
+        "take_profit_usdt_min": s.take_profit_usdt_min,
+        "take_profit_usdt_max": s.take_profit_usdt_max,
+        "target_profit_note": (
+            f"Bank ${s.take_profit_usdt_min:.1f}–${s.take_profit_usdt_max:.1f} USDT profit · "
+            f"max loss ${s.risk_per_trade_usdt:.2f}–${s.risk_per_trade_usdt_max:.2f} at SL"
+        ),
         "max_signals_per_day": s.max_take_signals_per_day,
         "signals_today": count_signals_today(),
         "user_takes_today": count_user_takes_today(),
@@ -73,7 +81,7 @@ def _trading_payload() -> dict:
         "why_this_trade": (
             f"1m buy-dip / sell-top on top {s.top_mover_scan_count} fast movers. "
             f"Up to {s.max_take_signals_per_day} scalps/day · scan every 1 min · max hold {s.scalp_holding_minutes} min. "
-            f"Risk ₹{s.risk_per_trade_inr:.0f} · bank ₹{s.scalp_target_inr:.0f}+ at T1 (1:1)."
+            f"Risk ${s.risk_per_trade_usdt:.2f} max · target ${s.take_profit_usdt:.2f} profit."
             + (
                 " AUTO-EXECUTE ON — orders placed on Binance Futures."
                 if is_auto_trade_enabled()

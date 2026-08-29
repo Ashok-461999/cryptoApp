@@ -8,6 +8,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
 from app.config import get_settings
+from app.services.binance_account import (
+    fixed_risk_usdt,
+    get_available_usdt,
+    get_live_capital_usdt,
+    max_leverage_for_capital,
+    per_trade_deploy_pct,
+    target_profit_usdt,
+)
 from app.services.crypto_futures_client import futures_client
 from app.services.crypto_watchlist import WatchlistSymbol, get_scan_symbol_order, get_top_24h_movers, get_watchlist, refresh_watchlist
 from app.services.signal_tracker import enrich_live_signals, mark_user_taken, save_signal
@@ -17,7 +25,6 @@ from app.signals.market_structure import swing_high_low
 from app.signals.momentum_scalp import SETUP_NAME as DIP_TOP_SETUP, dip_top_scalp
 from app.signals.position_sizing_crypto import plan_crypto_futures
 from app.signals.regime import detect_regime
-from app.signals.schemas import T1_R, T2_R
 from app.signals.setups import SETUP_FUNCTIONS
 from app.signals.sl_levels import normalize_stop_loss
 from app.signals.trade_decision import PERMANENTLY_DISABLED_SETUPS, SETUP_PRIORITY, TOP_SETUPS, evaluate_trade_decision
@@ -449,25 +456,39 @@ class CryptoScanner:
                 if risk <= 0:
                     continue
                 sign = 1 if direction == "LONG" else -1
-                t1 = entry + sign * risk * T1_R
-                t2 = entry + sign * risk * T2_R
+                live_cap = get_live_capital_usdt(settings)
 
                 plan = plan_crypto_futures(
                     symbol=sym.pair,
                     direction=direction,
                     entry=entry,
                     stop_loss=stop,
-                    target_1=t1,
-                    target_2=t2,
-                    capital_usdt=settings.crypto_capital_usdt,
-                    risk_percent=settings.risk_percent,
-                    max_deploy_pct=settings.max_deploy_pct,
+                    target_1=entry,
+                    target_2=entry,
+                    capital_usdt=live_cap,
+                    risk_usdt=fixed_risk_usdt(settings),
+                    risk_usdt_max=settings.risk_per_trade_usdt_max,
+                    max_deploy_pct=per_trade_deploy_pct(live_cap, settings),
+                    available_usdt=get_available_usdt(settings),
+                    max_leverage_cap=max_leverage_for_capital(live_cap, settings),
                     atr_pct=atr_p,
                     sl_basis=result.sl_basis,
                     scalp_mode=scalp_tight,
                 )
                 if not plan.can_afford:
                     continue
+                if plan.max_loss_usdt > settings.risk_per_trade_usdt_max * 1.05:
+                    continue
+
+                tp_u = target_profit_usdt(settings)
+                notional = plan.notional_usdt
+                if notional > 0:
+                    move_frac = tp_u / notional
+                    t1 = entry * (1 + move_frac * sign)
+                    t2 = entry * (1 + move_frac * sign * 1.2)
+                else:
+                    t1 = entry + sign * risk * 2.5
+                    t2 = t1
 
                 confidence = decision["take_confidence"]
                 min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
@@ -479,6 +500,10 @@ class CryptoScanner:
                 rr_label = "1:1" if plan.risk_reward >= 0.95 else f"1:{plan.risk_reward:.1f}"
 
                 signal = plan.to_dict()
+                signal["target_1_price"] = t1
+                signal["target_2_price"] = t2
+                signal["max_loss_usdt"] = round(plan.max_loss_usdt, 3)
+                signal["target_profit_usdt"] = tp_u
                 hold_m = settings.scalp_holding_minutes
                 scalp_label = "Buy dip" if result.direction == "bullish" else "Sell top"
                 signal.update({
@@ -503,7 +528,7 @@ class CryptoScanner:
                         f"Risk:Reward {round(plan.risk_reward, 2)} to T1 (quick scalp)",
                         f"Confidence: {confidence}% — {'A+ NOTIFY' if notify else 'A quality scalp'}",
                         f"SL basis: {result.sl_basis}",
-                        f"Leverage: {plan.leverage}x · Risk ₹{settings.risk_per_trade_inr:.0f} · Target ₹{settings.scalp_target_inr:.0f}+",
+                        f"Leverage: {plan.leverage}x · Risk ${settings.risk_per_trade_usdt:.2f} · Target ${tp_u:.2f}",
                         f"Fast mover · Funding: {round(funding, 4)}% · {sym.category.upper()}",
                     ],
                     "volume_24h": sym.volume_24h_usdt,
@@ -522,6 +547,8 @@ class CryptoScanner:
                     "position_inr": round(plan.margin_usdt * settings.usdt_to_inr * plan.leverage, 0),
                     "capital_inr": settings.crypto_capital_inr,
                     "risk_per_trade_inr": settings.risk_per_trade_inr,
+                    "risk_per_trade_usdt": settings.risk_per_trade_usdt,
+                    "take_profit_usdt": tp_u,
                     "spread_warning": sym.spread_pct > 0.1,
                     "trading_style": settings.trading_style,
                 })

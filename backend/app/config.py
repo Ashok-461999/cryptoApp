@@ -9,19 +9,41 @@ class Settings(BaseSettings):
     app_env: str = "development"
     cors_origins: str = "*"
 
-    # Capital & risk — ₹20,000 INR
+    # Capital & risk — small wallet uses fixed USDT loss / profit per trade
     crypto_capital_inr: float = 20000.0
-    risk_per_trade_inr: float = 200.0  # fixed ₹200 risk per trade (max loss at SL)
+    risk_per_trade_usdt: float = 0.6
+    risk_per_trade_usdt_max: float = 0.75
+    take_profit_usdt: float = 1.75
+    take_profit_usdt_min: float = 1.5
+    take_profit_usdt_max: float = 2.0
+    min_win_close_usdt: float = 1.25
     max_deploy_pct: float = 40.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"
-    min_rr_for_take: float = 1.0  # 1:1 quick scalp — bank at T1, no 1:3 wait
-    normal_min_rr: float = 0.9  # movement scalp — tight SL, near 1:1
-    target_profit_inr_min: float = 120.0
-    take_profit_inr: float = 150.0  # auto-close WIN when live PnL ≥ ₹150
-    scalp_target_inr: float = 150.0  # quick scalp bank target
-    leverage_min: int = 25
-    leverage_max: int = 40
+    min_rr_for_take: float = 2.0  # ~$1.75 TP on $0.6 risk
+    normal_min_rr: float = 1.8
+    leverage_min: int = 5
+    leverage_max: int = 10
+
+    @property
+    def risk_per_trade_inr(self) -> float:
+        return round(self.risk_per_trade_usdt * self.usdt_to_inr, 0)
+
+    @property
+    def take_profit_inr(self) -> float:
+        return round(self.take_profit_usdt * self.usdt_to_inr, 0)
+
+    @property
+    def scalp_target_inr(self) -> float:
+        return self.take_profit_inr
+
+    @property
+    def target_profit_inr_min(self) -> float:
+        return round(self.take_profit_usdt_min * self.usdt_to_inr, 0)
+
+    @property
+    def min_win_close_inr(self) -> float:
+        return round(self.min_win_close_usdt * self.usdt_to_inr, 0)
 
     @property
     def crypto_capital_usdt(self) -> float:
@@ -29,7 +51,10 @@ class Settings(BaseSettings):
 
     @property
     def risk_percent(self) -> float:
-        return round(self.risk_per_trade_inr / self.crypto_capital_inr * 100, 2)
+        cap = self.crypto_capital_usdt
+        if cap <= 0:
+            return 0.0
+        return round(self.risk_per_trade_usdt / cap * 100, 2)
 
     # Database — Neon Postgres (free tier) or local SQLite fallback
     database_url: str = ""
@@ -57,7 +82,6 @@ class Settings(BaseSettings):
     prioritize_meme_coins: bool = True
     mover_min_confidence: int = 48  # top 24h movers
     meme_min_confidence: int = 48
-    min_win_close_inr: float = 80.0  # count small scalp wins on timeout exit
     mover_min_volume_usdt: float = 1_500_000.0  # include volatile memes like Binance Markets tab
     mover_min_change_pct: float = 2.5  # fast movers only — floor for |24h %|
 
