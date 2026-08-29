@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     max_deploy_pct: float = 40.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"
-    min_rr_for_take: float = 2.0  # ~$1.75 TP on $0.6 risk
-    normal_min_rr: float = 1.8
+    min_rr_for_take: float = 2.0  # high-priority notify filter
+    normal_min_rr: float = 1.0  # dip/top fires at 1:1; TP sized to $1.75 after
     leverage_min: int = 5
     leverage_max: int = 10
 

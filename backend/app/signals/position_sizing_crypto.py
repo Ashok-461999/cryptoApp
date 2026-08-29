@@ -234,17 +234,9 @@ def plan_crypto_futures(
         max_margin = min(max_margin, available_usdt * (max_deploy_pct / 100.0))
 
     if margin_required > max_margin:
-        # Shrink position to fit wallet — keep fixed ₹ risk only if leverage allows
         margin_required = max_margin
         notional_usdt = margin_required * leverage
         max_loss_usdt = notional_usdt * stop_frac
-        if max_loss_usdt > risk_usdt * 1.1:
-            return _failed_plan(
-                pair,
-                direction,
-                entry,
-                f"NO_TRADE — wallet too small for ₹ risk at {leverage}x (need ${margin_required:.2f} margin)",
-            )
         quantity = notional_usdt / entry if entry > 0 else 0
     else:
         quantity = notional_at_risk / entry if entry > 0 else 0
@@ -282,9 +274,12 @@ def plan_crypto_futures(
         f"Target {target_1:.8g} · STRICT SL {stop_loss:.8g} · {leverage}x"
     )
 
+    loss_cap = risk_usdt_max if risk_usdt_max is not None else risk_usdt
     can_afford = (
-        margin_required <= max_margin
-        and max_loss_usdt <= risk_usdt * 1.05
+        margin_required <= max_margin * 1.01
+        and max_loss_usdt <= loss_cap * 1.05
+        and margin_required > 0
+        and quantity > 0
         and not liquidation_too_close(entry, stop_loss, leverage, direction)
     )
 

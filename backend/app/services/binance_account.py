@@ -58,7 +58,7 @@ def per_trade_deploy_pct(capital_usdt: float, settings: Settings | None = None) 
     """Smaller wallets — smaller % per trade to avoid blowing the account."""
     s = settings or get_settings()
     if capital_usdt < 60:
-        return min(s.max_deploy_pct, 12.0)
+        return min(s.max_deploy_pct, 18.0)
     if capital_usdt < 120:
         return min(s.max_deploy_pct, 18.0)
     return s.max_deploy_pct
