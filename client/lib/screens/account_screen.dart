@@ -65,32 +65,9 @@ class AccountScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(child: _MiniStat(label: 'Win rate', value: '${s.winRatePct.toStringAsFixed(0)}%', color: AppColors.profit)),
-                const SizedBox(width: 10),
-                Expanded(child: _MiniStat(label: 'W / L / Open', value: '${s.winCount} / ${s.lossCount} / ${s.openTrades}', color: AppColors.text)),
-              ],
-            ),
-            if (s.todayOutcomeSequence.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.border)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('TODAY W/L SEQUENCE', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 1)),
-                    const SizedBox(height: 6),
-                    Text(s.todayOutcomeSequence.replaceAll(',', ' · '), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text)),
-                  ],
-                ),
-              ),
-            ],
             if (s.dailyPnl.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              const Text('Daily PnL (saved)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+              const SizedBox(height: 8),
+              const Text('Daily P&L', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
               const SizedBox(height: 8),
               ...s.dailyPnl.take(7).map((d) => _DailyPnlTile(row: d)),
             ],
@@ -124,25 +101,16 @@ class _DailyPnlTile extends StatelessWidget {
     final color = row.netPnlInr >= 0 ? AppColors.profit : AppColors.loss;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.border)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Text(row.date, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
-              const Spacer(),
-              Text('₹${row.netPnlInr.toStringAsFixed(0)}', style: TextStyle(fontWeight: FontWeight.w800, color: color)),
-            ],
+          Text(row.date, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.text)),
+          const Spacer(),
+          Text(
+            '${row.netPnlInr >= 0 ? '+' : ''}₹${row.netPnlInr.toStringAsFixed(0)}',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: color),
           ),
-          const SizedBox(height: 4),
-          Text('${row.wins}W / ${row.losses}L · ${row.totalTrades} trades · equity ₹${NumberFormat('#,##0').format(row.equityEndInr)}', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
-          if (row.outcomeSequence.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(row.outcomeSequence.replaceAll(',', ' · '), style: const TextStyle(fontSize: 10, color: AppColors.accent)),
-            ),
         ],
       ),
     );
