@@ -13,6 +13,7 @@ from app.services.binance_account import (
     get_available_usdt,
     get_live_capital_usdt,
     max_leverage_for_capital,
+    min_leverage_for_capital,
     per_trade_deploy_pct,
     target_profit_usdt,
 )
@@ -470,6 +471,7 @@ class CryptoScanner:
                     risk_usdt_max=settings.risk_per_trade_usdt_max,
                     max_deploy_pct=per_trade_deploy_pct(live_cap, settings),
                     available_usdt=get_available_usdt(settings),
+                    min_leverage_cap=min_leverage_for_capital(live_cap, settings),
                     max_leverage_cap=max_leverage_for_capital(live_cap, settings),
                     atr_pct=atr_p,
                     sl_basis=result.sl_basis,

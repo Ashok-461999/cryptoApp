@@ -13,17 +13,17 @@ class Settings(BaseSettings):
     crypto_capital_inr: float = 20000.0
     risk_per_trade_usdt: float = 0.6
     risk_per_trade_usdt_max: float = 0.75
-    take_profit_usdt: float = 1.75
-    take_profit_usdt_min: float = 1.5
-    take_profit_usdt_max: float = 2.0
-    min_win_close_usdt: float = 1.25
+    take_profit_usdt: float = 1.20  # ~₹100
+    take_profit_usdt_min: float = 1.0
+    take_profit_usdt_max: float = 1.25
+    min_win_close_usdt: float = 1.0
     max_deploy_pct: float = 40.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"
     min_rr_for_take: float = 2.0  # high-priority notify filter
     normal_min_rr: float = 1.0  # dip/top fires at 1:1; TP sized to $1.75 after
-    leverage_min: int = 5
-    leverage_max: int = 10
+    leverage_min: int = 15
+    leverage_max: int = 20
 
     @property
     def risk_per_trade_inr(self) -> float:
@@ -111,7 +111,7 @@ class Settings(BaseSettings):
     auto_execute_trades: bool = False
     auto_execute_min_confidence: int = 55
     max_exchange_trades_per_day: int = 150
-    max_exchange_open_positions: int = 8
+    max_exchange_open_positions: int = 2  # small wallet — max 2 trades at once
     trading_paused_default: bool = True
 
     @property

@@ -160,22 +160,28 @@ def suggest_leverage(
     stop: float,
     direction: str,
     *,
+    min_leverage_cap: int | None = None,
     max_leverage_cap: int | None = None,
 ) -> int:
     base = TIER_DEFAULT_LEV.get(tier, 40)
+    if max_leverage_cap is not None:
+        base = max_leverage_cap
+    if min_leverage_cap is not None:
+        base = max(base, min_leverage_cap)
     if atr_pct > 5.0:
         base -= 5
     elif atr_pct > 3.0:
         base -= 3
     if stop_distance_pct > 3.0:
-        base = min(base, 40)
+        base = min(base, max_leverage_cap or 40)
     max_lev = TIER_MAX_LEV.get(tier, 50)
     if max_leverage_cap is not None:
         max_lev = min(max_lev, max_leverage_cap)
-    lev = min(max(base, MIN_LEVERAGE), max_lev)
-    while lev > MIN_LEVERAGE and liquidation_too_close(entry, stop, lev, direction):
+    floor = min_leverage_cap if min_leverage_cap is not None else MIN_LEVERAGE
+    lev = min(max(base, floor), max_lev)
+    while lev > floor and liquidation_too_close(entry, stop, lev, direction):
         lev -= 1
-    return max(lev, MIN_LEVERAGE)
+    return max(lev, floor)
 
 
 def plan_crypto_futures(
@@ -195,6 +201,7 @@ def plan_crypto_futures(
     risk_usdt: float | None = None,
     risk_usdt_max: float | None = None,
     available_usdt: float | None = None,
+    min_leverage_cap: int | None = None,
     max_leverage_cap: int | None = None,
 ) -> CryptoFuturesPlan:
     """Size a crypto futures trade with strict SL and auto leverage."""
@@ -215,6 +222,7 @@ def plan_crypto_futures(
     stop_dist_pct = abs(entry - stop_loss) / entry * 100
     leverage = suggest_leverage(
         pair, atr_pct, stop_dist_pct, tier, entry, stop_loss, direction,
+        min_leverage_cap=min_leverage_cap,
         max_leverage_cap=max_leverage_cap,
     )
     max_lev = TIER_MAX_LEV.get(tier, 5)

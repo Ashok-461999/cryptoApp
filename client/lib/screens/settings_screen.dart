@@ -358,7 +358,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               SizedBox(height: 8),
               Text(
                 '• 1m scalp: BUY the dip, SELL the top on fast movers\n'
-                '• 100–150 signals/day · 5 min max hold · bank ₹150+ at T1\n'
+                '• 100–150 signals/day · 5 min max hold · bank ₹100+ at T1\n'
                 '• Only trade coins with high 24h % move\n'
                 '• Take notification alerts seriously\n'
                 '• Quality over quantity — skip weak setups',
