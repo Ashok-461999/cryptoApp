@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     binance_taker_fee_pct: float = 0.04
     slippage_pct: float = 0.45  # entry drag % (fees + market fill — see live fills)
     fee_buffer_usdt: float = 0.03
+    max_notional_usdt_small_wallet: float = 42.0  # cap ~$40 pos on ~$35 wallet
+    small_wallet_threshold_usdt: float = 60.0
+    bracket_min_distance_pct: float = 0.20  # SL/TP must be 0.2%+ from fill
+    min_net_profit_to_fee_ratio: float = 2.5  # skip if fees eat the scalp
     max_deploy_pct: float = 40.0
     usdt_to_inr: float = 83.0
     trading_style: str = "scalp"
@@ -118,9 +122,9 @@ class Settings(BaseSettings):
     binance_api_secret: str = ""
     binance_futures_testnet: bool = False
     auto_execute_trades: bool = False
-    auto_execute_min_confidence: int = 55
-    max_exchange_trades_per_day: int = 200
-    max_exchange_open_positions: int = 2  # small wallet — max 2 trades at once
+    auto_execute_min_confidence: int = 72
+    max_exchange_trades_per_day: int = 80
+    max_exchange_open_positions: int = 1  # one trade at a time on small wallet
     trading_paused_default: bool = True
 
     @property

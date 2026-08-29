@@ -34,6 +34,15 @@ def net_profit_after_fees(gross_profit_usdt: float, notional_usdt: float, settin
     return max(0.0, gross_profit_usdt - round_trip_fee_usdt(notional_usdt, settings))
 
 
+def passes_fee_gate(tp_net_usdt: float, notional_usdt: float, settings: Settings | None = None) -> bool:
+    """Reject scalps where round-trip fees eat the edge."""
+    s = settings or get_settings()
+    fees = round_trip_fee_usdt(notional_usdt, s) + estimated_entry_drag_usdt(notional_usdt, s)
+    if tp_net_usdt <= 0:
+        return False
+    return tp_net_usdt >= fees * s.min_net_profit_to_fee_ratio
+
+
 def estimated_entry_drag_usdt(notional_usdt: float, settings: Settings | None = None) -> float:
     """One-side taker fee + slippage drag seen on market fills (e.g. -0.09 on ~$21)."""
     if notional_usdt <= 0:

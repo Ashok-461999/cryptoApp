@@ -203,6 +203,7 @@ def plan_crypto_futures(
     available_usdt: float | None = None,
     min_leverage_cap: int | None = None,
     max_leverage_cap: int | None = None,
+    max_notional_cap: float | None = None,
 ) -> CryptoFuturesPlan:
     """Size a crypto futures trade with strict SL and auto leverage."""
     direction = direction.upper()
@@ -255,6 +256,12 @@ def plan_crypto_futures(
         max_loss_usdt = risk_usdt_max
         notional_usdt = max_loss_usdt / stop_frac
         margin_required = notional_usdt / leverage
+        quantity = notional_usdt / entry
+
+    if max_notional_cap is not None and notional_usdt > max_notional_cap and entry > 0:
+        notional_usdt = max_notional_cap
+        margin_required = notional_usdt / leverage
+        max_loss_usdt = notional_usdt * stop_frac
         quantity = notional_usdt / entry
 
     liq = liquidation_price(entry, leverage, direction)

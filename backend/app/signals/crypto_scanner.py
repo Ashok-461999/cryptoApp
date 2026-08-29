@@ -13,6 +13,7 @@ from app.services.binance_account import (
     get_available_usdt,
     get_live_capital_usdt,
     max_leverage_for_capital,
+    max_notional_for_wallet,
     min_leverage_for_capital,
     per_trade_deploy_pct,
     scalp_rr_for_confidence,
@@ -21,7 +22,7 @@ from app.services.crypto_futures_client import futures_client
 from app.services.crypto_watchlist import WatchlistSymbol, get_scan_symbol_order, get_top_24h_movers, get_watchlist, refresh_watchlist
 from app.services.signal_tracker import enrich_live_signals, mark_user_taken, save_signal
 from app.services.trade_analytics import get_disabled_setups
-from app.services.trading_fees import estimated_entry_drag_usdt, round_trip_fee_usdt, tp_price_from_rr
+from app.services.trading_fees import estimated_entry_drag_usdt, passes_fee_gate, round_trip_fee_usdt, tp_price_from_rr
 from app.signals.indicators import atr_pct
 from app.signals.market_structure import swing_high_low
 from app.signals.momentum_scalp import SETUP_NAME as DIP_TOP_SETUP, dip_top_scalp
@@ -475,6 +476,7 @@ class CryptoScanner:
                     available_usdt=get_available_usdt(settings),
                     min_leverage_cap=min_leverage_for_capital(live_cap, confidence, settings),
                     max_leverage_cap=max_leverage_for_capital(live_cap, confidence, settings),
+                    max_notional_cap=max_notional_for_wallet(live_cap, settings),
                     atr_pct=atr_p,
                     sl_basis=result.sl_basis,
                     scalp_mode=scalp_tight,
@@ -490,6 +492,8 @@ class CryptoScanner:
                 t1, t2, tp_gross, tp_net = tp_price_from_rr(
                     entry, stop, sign, rr, plan.notional_usdt, settings,
                 )
+                if not passes_fee_gate(tp_net, plan.notional_usdt, settings):
+                    continue
 
                 min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
                 if confidence <= min_conf:

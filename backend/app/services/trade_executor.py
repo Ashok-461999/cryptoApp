@@ -10,7 +10,9 @@ from sqlalchemy import func, select
 
 from app.config import get_settings
 from app.db.models import SignalTrade, get_session
+from app.services.binance_account import get_live_capital_usdt, max_notional_for_wallet
 from app.services.binance_trading_client import BinanceTradingError, binance_trading
+from app.services.trading_fees import passes_fee_gate, round_trip_fee_usdt
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +76,51 @@ def _can_execute(signal: dict) -> tuple[bool, str]:
     max_loss = float(signal.get("max_loss_usdt") or 0)
     if max_loss > s.risk_per_trade_usdt_max * 1.05:
         return False, f"max loss ${max_loss:.2f} exceeds ${s.risk_per_trade_usdt_max:.2f} cap"
+    notional = float(signal.get("notional_usdt") or 0)
+    if notional <= 0 and margin > 0:
+        notional = margin * int(signal.get("leverage") or 1)
+    cap = max_notional_for_wallet(get_live_capital_usdt(s), s)
+    if notional > cap * 1.02:
+        return False, f"notional ${notional:.2f} exceeds wallet cap ${cap:.2f}"
+    tp_net = float(signal.get("target_profit_usdt") or 0)
+    if notional > 0 and not passes_fee_gate(tp_net, notional, s):
+        return False, "expected profit too small vs fees"
     return True, "ok"
+
+
+def _place_brackets(
+    symbol: str,
+    direction: str,
+    fill_price: float,
+    fill_qty: float,
+    sl: float,
+    tp: float,
+    *,
+    position_side: str | None,
+) -> tuple[dict, dict]:
+    """Place SL+TP with distance adjust + retry (avoids instant market-close churn)."""
+    exit_side = "SELL" if direction == "LONG" else "BUY"
+    last_err: BinanceTradingError | None = None
+    for widen in (0.0, 0.15, 0.35):
+        adj_sl, adj_tp = binance_trading.adjust_bracket_prices(
+            symbol, direction, fill_price, sl, tp, widen_pct=widen,
+        )
+        try:
+            sl_order = binance_trading.place_stop_market(
+                symbol, exit_side, adj_sl, fill_qty, position_side=position_side,
+            )
+            tp_order = binance_trading.place_take_profit_market(
+                symbol, exit_side, adj_tp, fill_qty, position_side=position_side,
+            )
+            return sl_order, tp_order
+        except BinanceTradingError as exc:
+            last_err = exc
+            if "immediately trigger" not in str(exc).lower():
+                raise
+            logger.warning("Bracket widen %.2f%% for %s: %s", widen, symbol, exc)
+    if last_err:
+        raise last_err
+    raise BinanceTradingError("Failed to place brackets")
 
 
 def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
@@ -130,11 +176,8 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
             _save_payload(trade, payload)
             session.commit()
 
-            sl_order = binance_trading.place_stop_market(
-                symbol, exit_side, sl, fill_qty, position_side=position_side
-            )
-            tp_order = binance_trading.place_take_profit_market(
-                symbol, exit_side, tp, fill_qty, position_side=position_side
+            sl_order, tp_order = _place_brackets(
+                symbol, direction, fill_price, fill_qty, sl, tp, position_side=position_side,
             )
 
             payload.update({
@@ -163,15 +206,18 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
             _save_payload(trade, payload)
             session.commit()
             logger.exception("Exchange execute failed trade #%s", trade_id)
-            try:
-                binance_trading.cancel_bracket_orders(
-                    symbol,
-                    sl_algo_id=payload.get("binance_sl_order_id"),
-                    tp_algo_id=payload.get("binance_tp_order_id"),
-                )
-                binance_trading.close_position_market(symbol)
-            except Exception:
-                logger.exception("Failed to unwind position after execute error for %s", symbol)
+            # Only flatten if entry filled but brackets could not be placed after retries
+            if payload.get("exchange_entry_filled"):
+                try:
+                    binance_trading.cancel_bracket_orders(
+                        symbol,
+                        sl_algo_id=payload.get("binance_sl_order_id"),
+                        tp_algo_id=payload.get("binance_tp_order_id"),
+                    )
+                    logger.error("Unwinding naked position %s after bracket failure", symbol)
+                    binance_trading.close_position_market(symbol)
+                except Exception:
+                    logger.exception("Failed to unwind position after execute error for %s", symbol)
             return {"ok": False, "reason": str(exc)}
     finally:
         session.close()

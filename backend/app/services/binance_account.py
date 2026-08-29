@@ -55,13 +55,20 @@ def target_profit_usdt(settings: Settings | None = None) -> float:
 
 
 def per_trade_deploy_pct(capital_usdt: float, settings: Settings | None = None) -> float:
-    """Smaller wallets — cap deploy %; higher leverage needs less margin per trade."""
+    """Small wallet — low deploy % so fees don't dominate."""
     s = settings or get_settings()
-    if capital_usdt < 60:
-        return min(s.max_deploy_pct, 22.0)
+    if capital_usdt < s.small_wallet_threshold_usdt:
+        return min(s.max_deploy_pct, 12.0)
     if capital_usdt < 120:
-        return min(s.max_deploy_pct, 25.0)
+        return min(s.max_deploy_pct, 18.0)
     return s.max_deploy_pct
+
+
+def max_notional_for_wallet(capital_usdt: float, settings: Settings | None = None) -> float:
+    s = settings or get_settings()
+    if capital_usdt < s.small_wallet_threshold_usdt:
+        return s.max_notional_usdt_small_wallet
+    return capital_usdt * 3.0
 
 
 def scalp_rr_for_confidence(confidence: int, settings: Settings | None = None) -> float:

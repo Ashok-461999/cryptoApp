@@ -215,6 +215,38 @@ class BinanceTradingClient:
         rules = self._load_symbol_rules(symbol)
         return self._round_step(price, rules["tick_size"])
 
+    def adjust_bracket_prices(
+        self,
+        symbol: str,
+        direction: str,
+        fill_price: float,
+        stop_price: float,
+        tp_price: float,
+        *,
+        min_distance_pct: float | None = None,
+        widen_pct: float = 0.0,
+    ) -> tuple[float, float]:
+        """Ensure SL/TP won't 'immediately trigger' after market fill."""
+        s = get_settings()
+        rules = self._load_symbol_rules(symbol)
+        tick = rules["tick_size"]
+        base_pct = (min_distance_pct if min_distance_pct is not None else s.bracket_min_distance_pct) / 100.0
+        min_dist = max(fill_price * (base_pct + widen_pct / 100.0), tick * 5)
+        sl = stop_price
+        tp = tp_price
+        d = direction.upper()
+        if d == "LONG":
+            if sl >= fill_price - min_dist:
+                sl = fill_price - min_dist
+            if tp <= fill_price + min_dist:
+                tp = fill_price + min_dist
+        else:
+            if sl <= fill_price + min_dist:
+                sl = fill_price + min_dist
+            if tp >= fill_price - min_dist:
+                tp = fill_price - min_dist
+        return self.round_price(symbol, sl), self.round_price(symbol, tp)
+
     def get_max_leverage(self, symbol: str) -> int:
         """Binance per-symbol max leverage from leverage brackets."""
         pair = normalize_pair(symbol)
