@@ -31,6 +31,7 @@ from app.signals.position_sizing_crypto import plan_crypto_futures
 from app.signals.regime import detect_regime
 from app.signals.setups import SETUP_FUNCTIONS
 from app.signals.sl_levels import normalize_stop_loss
+from app.signals.backtest_gate import passes_backtest_gate
 from app.signals.trade_decision import PERMANENTLY_DISABLED_SETUPS, SETUP_PRIORITY, TOP_SETUPS, evaluate_trade_decision
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ ENTRY_TF = "1m"
 LOOKBACK = 120
 
 _CATEGORY_ORDER = {"mover": 0, "meme": 0, "major": 1, "alt": 2}
-FOCUS_PAIRS = frozenset({"BTCUSDT", "PAXGUSDT"})
+FOCUS_PAIRS = frozenset({"BTCUSDT", "ETHUSDT", "PAXGUSDT"})
 SCALP_SETUPS = frozenset({DIP_TOP_SETUP, "momentum_scalp", "dip_top_scalp"})
 
 
@@ -290,13 +291,21 @@ class CryptoScanner:
         if not trade_id:
             return {"ok": False, "error": "Could not start tracking this signal"}
 
+        client_id = (payload.get("client_id") or "").strip()
+        if client_id:
+            payload["client_id"] = client_id
+            from app.services.client_store import register_client
+            register_client(client_id)
+
         mark_user_taken(trade_id)
 
         try:
+            from app.services.client_store import client_binance_keys
             from app.services.trade_executor import execute_signal, is_auto_trade_enabled
 
-            if is_auto_trade_enabled() or payload.get("force_exchange"):
-                execute_signal(payload, trade_id, force=True)
+            live_keys = client_binance_keys(client_id) if client_id else None
+            if is_auto_trade_enabled() or payload.get("force_exchange") or live_keys:
+                execute_signal(payload, trade_id, force=True, client_id=client_id or None)
         except Exception:
             logger.exception("Exchange execute on take failed")
 
@@ -526,7 +535,11 @@ class CryptoScanner:
                 t1, t2, tp_gross, tp_net = targets
                 if not validate_scalp_levels(entry, stop, t1, direction):
                     continue
-                # Fee gate only blocks auto-execute, not showing the signal
+                bt_ok, bt_meta = passes_backtest_gate(entry_df, direction, entry, stop, t1, settings)
+                if not bt_ok:
+                    continue
+                if not passes_fee_gate(tp_net, plan.notional_usdt, settings):
+                    continue
 
                 min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
                 if confidence <= min_conf:
@@ -570,7 +583,7 @@ class CryptoScanner:
                         f"Confidence: {confidence}% — {'A+ NOTIFY' if notify else 'A quality scalp'}",
                         f"SL basis: {result.sl_basis}",
                         f"Leverage: {plan.leverage}x · Risk ₹{settings.risk_per_trade_inr:.0f} · {rr_label} net ~₹{round(tp_net * settings.usdt_to_inr):.0f} (costs ~₹{round((fee_est + entry_drag) * settings.usdt_to_inr):.0f})",
-                        f"Fast mover · Funding: {round(funding, 4)}% · {sym.category.upper()}",
+                        f"Backtest: {bt_meta.get('win_rate', 0)}% WR ({bt_meta.get('samples', 0)} samples)",
                     ],
                     "volume_24h": sym.volume_24h_usdt,
                     "change_pct_24h": sym.change_pct_24h,
@@ -591,6 +604,8 @@ class CryptoScanner:
                     "risk_per_trade_inr": settings.risk_per_trade_inr,
                     "risk_per_trade_usdt": settings.risk_per_trade_usdt,
                     "take_profit_usdt": tp_net,
+                    "backtest_win_rate": bt_meta.get("win_rate", 0),
+                    "backtest_samples": bt_meta.get("samples", 0),
                     "spread_warning": sym.spread_pct > 0.1,
                     "trading_style": settings.trading_style,
                 })

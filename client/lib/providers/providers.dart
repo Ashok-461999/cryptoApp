@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/account.dart';
 import '../models/crypto_signal.dart';
 import '../services/api_service.dart';
+import '../services/client_credentials.dart';
 import '../services/server_config.dart';
+
+final clientIdProvider = FutureProvider<String>((ref) => ClientCredentialsStore.getOrCreateClientId());
 
 final serverUrlProvider = FutureProvider<String>((ref) => ServerConfig.getBaseUrl());
 
@@ -55,5 +58,7 @@ final marketNewsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
 
 final tradingSettingsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   ref.watch(serverUrlProvider);
-  return ref.read(apiServiceProvider).fetchTradingSettings();
+  final clientId = await ref.watch(clientIdProvider.future);
+  await ref.read(apiServiceProvider).registerClient(clientId: clientId);
+  return ref.read(apiServiceProvider).fetchTradingSettings(clientId: clientId);
 });

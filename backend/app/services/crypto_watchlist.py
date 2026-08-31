@@ -189,7 +189,7 @@ def _category(base: str, tier: str) -> str:
 
 
 _CATEGORY_ORDER = {"meme": 0, "major": 1, "alt": 2}
-FOCUS_PAIRS = ("BTCUSDT", "PAXGUSDT")
+FOCUS_PAIRS = ("BTCUSDT", "ETHUSDT", "PAXGUSDT")
 
 
 def get_meme_coins() -> list[WatchlistSymbol]:
@@ -216,10 +216,15 @@ def get_top_trending_memes(limit: int | None = None) -> list[WatchlistSymbol]:
 
 
 def get_scan_symbol_order() -> list[WatchlistSymbol]:
-    """Only Binance futures top 24h % movers — no random alts or majors."""
+    """BTC + ETH + Gold always, then top movers."""
     settings = get_settings()
-    if settings.scan_24h_movers_only:
-        return get_top_24h_movers()
+    core = _core_symbols()
+    core_pairs = {s.pair for s in core}
+    movers = [m for m in get_top_24h_movers() if m.pair not in core_pairs]
+    cap = max(0, settings.top_mover_scan_count)
+    combined = list(core) + movers[:cap]
+    if combined:
+        return combined
 
     wl = get_watchlist()
     if not wl.symbols:
@@ -228,21 +233,37 @@ def get_scan_symbol_order() -> list[WatchlistSymbol]:
     by_pair = {s.pair: s for s in wl.symbols}
     focus = [by_pair[p] for p in FOCUS_PAIRS if p in by_pair]
     trending = [s for s in get_top_24h_movers() if s.pair not in FOCUS_PAIRS]
-    trending_pairs = {s.pair for s in trending}
-    majors = [
-        s for s in wl.symbols
-        if s.category == "major" and s.pair not in FOCUS_PAIRS and s.pair not in trending_pairs
-    ][:6]
-    if settings.prioritize_meme_coins:
-        return list(focus) + list(trending) + majors
-    rest = [
-        s for s in wl.symbols
-        if s.pair not in FOCUS_PAIRS
-        and s.pair not in trending_pairs
-        and s.category != "major"
-    ]
-    rest.sort(key=lambda s: _CATEGORY_ORDER.get(s.category, 2))
-    return list(focus) + list(trending) + majors + rest
+    return list(focus) + trending[:cap]
+
+
+def _core_symbols() -> list[WatchlistSymbol]:
+    settings = get_settings()
+    pairs = settings.core_pairs_list or list(FOCUS_PAIRS)
+    try:
+        tickers = binance_data.get_futures_ticker_24hr()
+        spreads = binance_data.get_all_book_tickers()
+    except Exception:
+        return []
+    out: list[WatchlistSymbol] = []
+    for pair in pairs:
+        t = tickers.get(pair, {}) if isinstance(tickers, dict) else {}
+        if not t:
+            continue
+        base = pair.replace("USDT", "")
+        tier = classify_tier(pair)
+        out.append(WatchlistSymbol(
+            symbol=pair, pair=pair, base=base, name=base, tier=tier,
+            volume_24h_usdt=float(t.get("quoteVolume") or 0),
+            spread_pct=spreads.get(pair, 0.1),
+            status="TRADING",
+            category="major",
+            last_price=float(t.get("lastPrice") or 0),
+            change_pct_24h=float(t.get("priceChangePercent") or 0),
+            abs_change_pct_24h=abs(float(t.get("priceChangePercent") or 0)),
+            high_24h=float(t.get("highPrice") or 0),
+            low_24h=float(t.get("lowPrice") or 0),
+        ))
+    return out
 
 
 def _fetch_perpetual_symbols() -> list[str]:

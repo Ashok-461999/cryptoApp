@@ -62,9 +62,53 @@ class ApiService {
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> fetchTradingSettings() async {
-    final r = await http.get(Uri.parse('$baseUrl/settings/trading'));
+  Future<Map<String, dynamic>> fetchTradingSettings({String? clientId}) async {
+    final q = clientId != null && clientId.isNotEmpty ? '?client_id=$clientId' : '';
+    final r = await http.get(Uri.parse('$baseUrl/settings/trading$q'));
     if (r.statusCode != 200) throw Exception('Failed to load settings');
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> registerClient({String? clientId}) async {
+    final r = await http.post(
+      Uri.parse('$baseUrl/settings/client/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'client_id': clientId}),
+    );
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> saveClientCredentials({
+    required String clientId,
+    String apiKey = '',
+    String apiSecret = '',
+    bool paperEnabled = true,
+    bool liveAutoTrade = false,
+  }) async {
+    final r = await http.post(
+      Uri.parse('$baseUrl/settings/client/credentials'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'client_id': clientId,
+        'api_key': apiKey,
+        'api_secret': apiSecret,
+        'paper_enabled': paperEnabled,
+        'live_auto_trade': liveAutoTrade,
+      }),
+    );
+    final body = jsonDecode(r.body) as Map<String, dynamic>;
+    if (r.statusCode != 200 || body['ok'] != true) {
+      throw Exception(body['reason'] ?? 'Failed to save credentials');
+    }
+    return body;
+  }
+
+  Future<Map<String, dynamic>> resetPaperWallet(String clientId) async {
+    final r = await http.post(
+      Uri.parse('$baseUrl/settings/client/paper-reset'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'client_id': clientId}),
+    );
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
 

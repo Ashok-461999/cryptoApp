@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 
 from app.config import get_settings
 from app.db.models import SignalTrade, get_session
-from app.services.binance_trading_client import BinanceTradingError, binance_trading
+from app.services.binance_trading_client import BinanceTradingClient, binance_trading, trading_client_for
 from app.services.trading_fees import passes_fee_gate
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ def _can_execute(signal: dict) -> tuple[bool, str]:
         return False, "daily exchange trade cap reached"
     if count_open_exchange_positions() >= s.max_exchange_open_positions:
         return False, "max open exchange positions reached"
-    bal = binance_trading.get_usdt_balance()
+    bal = bx.get_usdt_balance()
     margin = float(signal.get("margin_usdt") or 0)
     if margin > 0 and bal < margin * 1.05:
         return False, f"insufficient USDT balance ({bal:.2f} < margin {margin:.2f})"
@@ -101,19 +101,21 @@ def _place_brackets(
     tp: float,
     *,
     position_side: str | None,
+    client: BinanceTradingClient | None = None,
 ) -> tuple[dict, dict]:
     """Place SL+TP with distance adjust + retry (avoids instant market-close churn)."""
+    bx = client or binance_trading
     exit_side = "SELL" if direction == "LONG" else "BUY"
     last_err: BinanceTradingError | None = None
     for widen in (0.0, 0.15, 0.35):
-        adj_sl, adj_tp = binance_trading.adjust_bracket_prices(
+        adj_sl, adj_tp = bx.adjust_bracket_prices(
             symbol, direction, fill_price, sl, tp, widen_pct=widen,
         )
         try:
-            sl_order = binance_trading.place_stop_market(
+            sl_order = bx.place_stop_market(
                 symbol, exit_side, adj_sl, fill_qty, position_side=position_side,
             )
-            tp_order = binance_trading.place_take_profit_market(
+            tp_order = bx.place_take_profit_market(
                 symbol, exit_side, adj_tp, fill_qty, position_side=position_side,
             )
             return sl_order, tp_order
@@ -127,10 +129,11 @@ def _place_brackets(
     raise BinanceTradingError("Failed to place brackets")
 
 
-def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
+def execute_signal(signal: dict, trade_id: int, *, force: bool = False, client_id: str | None = None) -> dict:
     """Open a Binance Futures position with SL + TP bracket orders."""
+    bx = trading_client_for(client_id)
     if force:
-        if not binance_trading.is_configured():
+        if not bx.is_configured():
             return {"ok": False, "reason": "Binance API keys not configured"}
         ok, reason = True, "manual take"
     else:
@@ -162,11 +165,11 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
             return {"ok": True, "reason": "already executed", "duplicate": True}
 
         try:
-            binance_trading.ensure_one_way_mode()
-            binance_trading.set_isolated_margin(symbol)
-            actual_lev = binance_trading.set_leverage(symbol, leverage)
-            position_side = direction if binance_trading.is_hedge_mode() else None
-            entry_order = binance_trading.place_market_order(
+            bx.ensure_one_way_mode()
+            bx.set_isolated_margin(symbol)
+            actual_lev = bx.set_leverage(symbol, leverage)
+            position_side = direction if bx.is_hedge_mode() else None
+            entry_order = bx.place_market_order(
                 symbol, entry_side, quantity, position_side=position_side
             )
             fill_qty = float(entry_order.get("executedQty") or quantity)
@@ -181,8 +184,10 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
             session.commit()
 
             sl_order, tp_order = _place_brackets(
-                symbol, direction, fill_price, fill_qty, sl, tp, position_side=position_side,
+                symbol, direction, fill_price, fill_qty, sl, tp, position_side=position_side, client=bx,
             )
+            if client_id:
+                payload["client_id"] = client_id
 
             payload.update({
                 "executed_on_exchange": True,
@@ -213,13 +218,13 @@ def execute_signal(signal: dict, trade_id: int, *, force: bool = False) -> dict:
             # Only flatten if entry filled but brackets could not be placed after retries
             if payload.get("exchange_entry_filled"):
                 try:
-                    binance_trading.cancel_bracket_orders(
+                    bx.cancel_bracket_orders(
                         symbol,
                         sl_algo_id=payload.get("binance_sl_order_id"),
                         tp_algo_id=payload.get("binance_tp_order_id"),
                     )
                     logger.error("Unwinding naked position %s after bracket failure", symbol)
-                    binance_trading.close_position_market(symbol)
+                    bx.close_position_market(symbol)
                 except Exception:
                     logger.exception("Failed to unwind position after execute error for %s", symbol)
             return {"ok": False, "reason": str(exc)}

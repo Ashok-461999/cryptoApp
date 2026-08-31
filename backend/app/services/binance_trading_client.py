@@ -29,11 +29,15 @@ class BinanceTradingError(Exception):
 
 
 class BinanceTradingClient:
-    def __init__(self) -> None:
+    def __init__(self, api_key: str | None = None, api_secret: str | None = None) -> None:
         self._client = httpx.Client(timeout=20.0)
         self._hedge_mode: bool | None = None
+        self._api_key_override = api_key
+        self._api_secret_override = api_secret
 
     def is_configured(self) -> bool:
+        if self._api_key_override and self._api_secret_override:
+            return True
         s = get_settings()
         return bool(s.binance_api_key and s.binance_api_secret)
 
@@ -45,11 +49,12 @@ class BinanceTradingClient:
 
     def _sign(self, params: dict[str, Any]) -> dict[str, Any]:
         s = get_settings()
+        secret = self._api_secret_override or s.binance_api_secret
         params = dict(params)
         params["timestamp"] = int(time.time() * 1000)
         query = urlencode(params, doseq=True)
         sig = hmac.new(
-            s.binance_api_secret.encode(),
+            secret.encode(),
             query.encode(),
             hashlib.sha256,
         ).hexdigest()
@@ -57,7 +62,9 @@ class BinanceTradingClient:
         return params
 
     def _headers(self) -> dict[str, str]:
-        return {"X-MBX-APIKEY": get_settings().binance_api_key}
+        s = get_settings()
+        key = self._api_key_override or s.binance_api_key
+        return {"X-MBX-APIKEY": key}
 
     def _request(self, method: str, path: str, params: dict[str, Any] | None = None) -> Any:
         if not self.is_configured():
@@ -478,3 +485,13 @@ class BinanceTradingClient:
 
 
 binance_trading = BinanceTradingClient()
+
+
+def trading_client_for(client_id: str | None = None) -> BinanceTradingClient:
+    """Per-client Binance client when live auto-trade keys are saved."""
+    if client_id:
+        from app.services.client_store import client_binance_keys
+        keys = client_binance_keys(client_id)
+        if keys:
+            return BinanceTradingClient(keys[0], keys[1])
+    return binance_trading

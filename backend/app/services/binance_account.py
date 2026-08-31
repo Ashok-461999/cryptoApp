@@ -22,13 +22,20 @@ def fetch_binance_ui() -> dict | None:
         return None
 
 
-def get_live_capital_usdt(settings: Settings | None = None) -> float:
-    """Use real Binance equity for sizing — never the ₹20k reference capital."""
+def get_live_capital_usdt(settings: Settings | None = None, client_id: str | None = None) -> float:
+    """Paper wallet compounds per client; live uses Binance equity."""
     s = settings or get_settings()
+    if client_id:
+        from app.services.client_store import get_paper_balance
+        row = get_paper_balance(client_id)
+        if row > 0:
+            return row
+    if s.crypto_paper_trading and not binance_trading.is_configured():
+        return s.paper_wallet_usdt
     ui = fetch_binance_ui()
     if ui and float(ui.get("equity_usdt") or 0) > 0:
         return float(ui["equity_usdt"])
-    return s.crypto_capital_usdt
+    return s.paper_wallet_usdt if s.crypto_paper_trading else s.crypto_capital_usdt
 
 
 def get_available_usdt(settings: Settings | None = None) -> float:

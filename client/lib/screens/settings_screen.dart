@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../services/client_credentials.dart';
 import '../services/user_profile.dart';
 import '../theme/app_theme.dart';
 
@@ -16,8 +17,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _goalController = TextEditingController();
+  final _apiKeyController = TextEditingController();
+  final _apiSecretController = TextEditingController();
   String _experience = 'Scalp Futures';
   bool _togglingTrading = false;
+  bool _paperEnabled = true;
+  bool _liveAutoTrade = false;
+  bool _savingCreds = false;
+  bool _obscureSecret = true;
 
   @override
   void initState() {
@@ -31,6 +38,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _emailController.text = p.email;
     _goalController.text = p.goal;
     _experience = p.experience;
+    final creds = await ClientCredentialsStore.loadLocal();
+    _apiKeyController.text = creds['api_key'] as String? ?? '';
+    _apiSecretController.text = creds['api_secret'] as String? ?? '';
+    _paperEnabled = creds['paper_enabled'] as bool? ?? true;
+    _liveAutoTrade = creds['live_auto_trade'] as bool? ?? false;
     if (mounted) setState(() {});
   }
 
@@ -45,6 +57,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile saved'), backgroundColor: AppColors.profit),
       );
+    }
+  }
+
+  Future<void> _saveTradingCredentials() async {
+    setState(() => _savingCreds = true);
+    try {
+      final clientId = await ClientCredentialsStore.getOrCreateClientId();
+      final api = ref.read(apiServiceProvider);
+      await api.saveClientCredentials(
+        clientId: clientId,
+        apiKey: _apiKeyController.text.trim(),
+        apiSecret: _apiSecretController.text.trim(),
+        paperEnabled: _paperEnabled,
+        liveAutoTrade: _liveAutoTrade,
+      );
+      await ClientCredentialsStore.saveLocal(
+        apiKey: _apiKeyController.text.trim(),
+        apiSecret: _apiSecretController.text.trim(),
+        paperEnabled: _paperEnabled,
+        liveAutoTrade: _liveAutoTrade,
+      );
+      ref.invalidate(tradingSettingsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Trading preferences saved'), backgroundColor: AppColors.profit),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e'), backgroundColor: AppColors.loss),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingCreds = false);
+    }
+  }
+
+  Future<void> _resetPaperWallet() async {
+    try {
+      final clientId = await ClientCredentialsStore.getOrCreateClientId();
+      await ref.read(apiServiceProvider).resetPaperWallet(clientId);
+      ref.invalidate(tradingSettingsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Paper wallet reset to \$100'), backgroundColor: AppColors.profit),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Reset failed: $e'), backgroundColor: AppColors.loss),
+        );
+      }
     }
   }
 
@@ -82,6 +148,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _goalController.dispose();
+    _apiKeyController.dispose();
+    _apiSecretController.dispose();
     super.dispose();
   }
 
@@ -165,6 +233,76 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 20),
+        PremiumCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('TRADING MODE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 1.2)),
+              const SizedBox(height: 8),
+              const Text(
+                'Paper: \$100 USDT virtual wallet (compounds after each trade). Live: your Binance API keys for auto-trade.',
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Paper wallet (\$100)', style: TextStyle(color: AppColors.text, fontSize: 14)),
+                subtitle: const Text('Practice with virtual balance', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                value: _paperEnabled,
+                activeThumbColor: AppColors.profit,
+                onChanged: (v) => setState(() => _paperEnabled = v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Live auto-trade (Binance)', style: TextStyle(color: AppColors.text, fontSize: 14)),
+                subtitle: const Text('Uses your API keys below — premium later', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                value: _liveAutoTrade,
+                activeThumbColor: AppColors.profit,
+                onChanged: (v) => setState(() => _liveAutoTrade = v),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _apiKeyController,
+                style: const TextStyle(color: AppColors.text),
+                decoration: const InputDecoration(labelText: 'Binance API Key'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _apiSecretController,
+                obscureText: _obscureSecret,
+                style: const TextStyle(color: AppColors.text),
+                decoration: InputDecoration(
+                  labelText: 'Binance API Secret',
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscureSecret ? Icons.visibility_off : Icons.visibility, color: AppColors.textMuted),
+                    onPressed: () => setState(() => _obscureSecret = !_obscureSecret),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _savingCreds ? null : _resetPaperWallet,
+                      child: const Text('Reset \$100'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _savingCreds ? null : _saveTradingCredentials,
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: AppColors.bg),
+                      child: Text(_savingCreds ? 'Saving…' : 'Save Trading Setup'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
         trading.when(
           data: (cfg) {
             final paused = cfg['trading_paused'] == true;
@@ -239,15 +377,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('LIVE SCALP SETUP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 1.2)),
+                      const Text('QUALITY SIGNAL SETUP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 1.2)),
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    StatTile(label: 'BINANCE', value: '₹${(cfg['binance_equity_inr'] ?? cfg['capital_inr'] ?? 0).toStringAsFixed(0)}'),
+                    StatTile(label: 'WALLET', value: '\$${(cfg['capital_usdt'] ?? 100).toString()}'),
                     StatTile(
-                      label: 'TODAY PNL',
-                      value: '${((cfg['binance_today_pnl_inr'] ?? 0) as num) >= 0 ? '+' : ''}₹${(cfg['binance_today_pnl_inr'] ?? 0).toStringAsFixed(0)}',
-                      valueColor: ((cfg['binance_today_pnl_inr'] ?? 0) as num) >= 0 ? AppColors.profit : AppColors.loss,
+                      label: 'MODE',
+                      value: (cfg['pnl_mode'] ?? 'paper').toString().toUpperCase(),
+                      valueColor: AppColors.accent,
                     ),
                   ],
                 ),
@@ -268,12 +406,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    StatTile(label: 'SIGNALS TODAY', value: '${cfg['signals_today'] ?? 0}'),
-                    StatTile(label: 'MIN CONF', value: '${cfg['min_confidence_pct'] ?? 82}%'),
+                    StatTile(label: 'MAX / DAY', value: '${cfg['max_signals_per_day'] ?? 10}'),
+                    StatTile(label: 'MIN CONF', value: '${cfg['min_confidence_pct'] ?? 78}%'),
                   ],
                 ),
                 const SizedBox(height: 14),
-                if (cfg['auto_execute_trades'] == true) ...[
+                if ((cfg['client']?['live_auto_trade'] == true) || cfg['auto_execute_trades'] == true) ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
@@ -300,31 +438,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                ] else if (cfg['auto_execute_configured'] == true) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.warn.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Text(
-                      'API keys configured — set AUTO_EXECUTE_TRADES=true on server to auto-place orders',
-                      style: TextStyle(fontSize: 11, color: AppColors.warn),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
                 ] else ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.loss.withValues(alpha: 0.08),
+                      color: AppColors.accent.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Text(
-                      'Reference PnL only — add Binance API keys on server for real auto-trading',
-                      style: TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.4),
+                    child: Text(
+                      cfg['pnl_mode_note'] ?? 'Paper \$100 wallet — enable Live Auto-Trade with Binance keys above',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.4),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -336,7 +460,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    cfg['why_this_trade'] ?? 'Top 24h movers · 1:3 scalp · AWS backend live',
+                    cfg['why_this_trade'] ?? 'Quality signals · backtest required',
                     style: const TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.45),
                   ),
                 ),
@@ -357,12 +481,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Text('How to win', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
               SizedBox(height: 8),
               Text(
-                '• 1m scalp: BUY the dip, SELL the top on fast movers\n'
-                '• Pure scalp · buy dip / sell top · 3 min max hold\n'
-                '• Risk ₹100 at SL · target ₹150–200 · 20–30x leverage\n'
-                '• Only trade coins with high 24h % move\n'
-                '• Take notification alerts seriously\n'
-                '• Quality over quantity — skip weak setups',
+                '• Max 10 quality signals/day · BTC · ETH · Gold + movers\n'
+                '• Every signal passes backtest gate before shown\n'
+                '• Paper wallet \$100 — balance updates after each trade\n'
+                '• Live auto-trade: add your Binance API keys in Settings\n'
+                '• Higher confidence only (78%+) · 5 min scan interval\n'
+                '• Premium subscription for live keys — coming soon',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.55),
               ),
             ],

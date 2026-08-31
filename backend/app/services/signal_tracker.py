@@ -16,6 +16,14 @@ logger = logging.getLogger(__name__)
 
 def _after_close(t: SignalTrade) -> None:
     try:
+        payload = json.loads(t.payload_json or "{}")
+        client_id = payload.get("client_id")
+        if client_id and t.status in ("WIN", "LOSS") and t.pnl_usdt:
+            from app.services.client_store import apply_paper_pnl
+            apply_paper_pnl(client_id, float(t.pnl_usdt or 0))
+    except Exception:
+        logger.exception("Paper wallet update failed")
+    try:
         from app.services.trade_analytics import on_trade_closed
         on_trade_closed(t)
     except Exception:

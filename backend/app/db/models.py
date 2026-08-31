@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, create_engine
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
@@ -75,6 +75,20 @@ class SetupPerformance(Base):
     win_rate_pct = Column(Float, default=0)
     avg_win_inr = Column(Float, default=0)
     avg_loss_inr = Column(Float, default=0)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class ClientAccount(Base):
+    """Per-app-client paper wallet and optional Binance API keys."""
+    __tablename__ = "client_accounts"
+
+    client_id = Column(String(64), primary_key=True)
+    paper_balance_usdt = Column(Float, default=100.0)
+    paper_enabled = Column(Boolean, default=True)
+    live_auto_trade = Column(Boolean, default=False)
+    api_key_enc = Column(Text, default="")
+    api_secret_enc = Column(Text, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 

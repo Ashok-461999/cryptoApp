@@ -9,34 +9,41 @@ class Settings(BaseSettings):
     app_env: str = "development"
     cors_origins: str = "*"
 
-    # Micro pure scalp — $0.22 risk, $0.25 profit, high leverage fast in/out
-    crypto_capital_inr: float = 20000.0
-    risk_per_trade_usdt: float = 0.22  # ~₹18 at SL
-    risk_per_trade_usdt_max: float = 0.25  # ~₹21 cap
-    scalp_rr_min: float = 1.1  # ~$0.24 on $0.22 risk
-    scalp_rr_ratio: float = 1.25  # ~$0.28 HQ
-    take_profit_usdt: float = 0.25  # ~₹21
-    take_profit_usdt_min: float = 0.22  # ~₹18 min net
-    take_profit_usdt_max: float = 0.30  # ~₹25 HQ
-    min_win_close_usdt: float = 0.15  # bank ~₹12+ on timeout scalp
+    # Quality signals — 10/day · BTC ETH Gold + movers · paper $100 wallet
+    crypto_capital_inr: float = 8300.0  # ~100 USDT reference
+    paper_wallet_usdt: float = 100.0
+    crypto_paper_trading: bool = True
+    risk_per_trade_usdt: float = 1.00  # ~1% of $100 paper wallet
+    risk_per_trade_usdt_max: float = 1.20
+    scalp_rr_min: float = 1.5
+    scalp_rr_ratio: float = 2.0
+    take_profit_usdt: float = 1.50
+    take_profit_usdt_min: float = 1.20
+    take_profit_usdt_max: float = 2.00
+    min_win_close_usdt: float = 0.80
     binance_taker_fee_pct: float = 0.04
     slippage_pct: float = 0.10
     fee_buffer_usdt: float = 0.01
-    max_notional_usdt_small_wallet: float = 70.0  # tight size — fees stay small
-    small_wallet_threshold_usdt: float = 80.0
-    bracket_min_distance_pct: float = 0.12
-    min_net_profit_to_fee_ratio: float = 1.5
-    max_deploy_pct: float = 40.0
+    max_notional_usdt_small_wallet: float = 200.0
+    small_wallet_threshold_usdt: float = 150.0
+    bracket_min_distance_pct: float = 0.15
+    min_net_profit_to_fee_ratio: float = 2.0
+    max_deploy_pct: float = 25.0
     usdt_to_inr: float = 83.0
-    trading_style: str = "scalp"
-    min_rr_for_take: float = 1.0
-    normal_min_rr: float = 0.9
-    leverage_min: int = 25
-    leverage_max: int = 35
-    leverage_hq_min: int = 30
-    leverage_hq_max: int = 40
-    high_quality_min_confidence: int = 80
+    trading_style: str = "quality"
+    min_rr_for_take: float = 1.5
+    normal_min_rr: float = 1.2
+    leverage_min: int = 10
+    leverage_max: int = 15
+    leverage_hq_min: int = 12
+    leverage_hq_max: int = 20
+    high_quality_min_confidence: int = 85
     elite_min_confidence: int = 90
+    backtest_min_win_rate: float = 55.0
+    backtest_min_samples: int = 4
+    backtest_lookback_bars: int = 80
+    core_scan_pairs: str = "BTCUSDT,ETHUSDT,PAXGUSDT"
+    client_data_secret: str = ""
 
     @property
     def risk_per_trade_inr(self) -> float:
@@ -77,28 +84,28 @@ class Settings(BaseSettings):
     database_url: str = ""
     sqlite_path: str = "./data/cryptoapp.db"
 
-    # Signal limits — high-frequency 1m dip/top scalp on fast movers
-    max_take_signals_per_day: int = 200
-    max_high_priority_signals_per_day: int = 60
-    max_signals_per_scan: int = 30
-    high_priority_min_confidence: int = 80
-    high_priority_min_rr: float = 1.0
+    # Signal limits — max 10 quality signals/day
+    max_take_signals_per_day: int = 10
+    max_high_priority_signals_per_day: int = 10
+    max_signals_per_scan: int = 2
+    high_priority_min_confidence: int = 85
+    high_priority_min_rr: float = 1.5
     history_retention_days: int = 7
-    top_mover_scan_count: int = 25  # more fast-move coins for 1m scalp
-    top_mover_scan_min: int = 15
-    mover_refresh_hours: int = 3  # re-fetch 24h % leaders every 3 hours
-    mover_levels_refresh_minutes: int = 12  # Entry/SL/TP1 valid ~12m then refresh
-    top_meme_scan_count: int = 25  # alias kept for compat
-    scan_24h_movers_only: bool = True  # only trade highest 24h move % coins
-    scalp_min_confidence: int = 60
-    live_min_confidence: int = 48
-    normal_min_confidence: int = 48  # more 1m dip/top signals
-    notify_min_confidence: int = 70
-    signal_cooldown_minutes: int = 1  # fast re-entry for high-frequency scalp
-    scalp_holding_minutes: int = 2  # fast in-out within 2 min
-    prioritize_meme_coins: bool = True
-    mover_min_confidence: int = 48  # top 24h movers
-    meme_min_confidence: int = 48
+    top_mover_scan_count: int = 7
+    top_mover_scan_min: int = 5
+    mover_refresh_hours: int = 3
+    mover_levels_refresh_minutes: int = 15
+    top_meme_scan_count: int = 7
+    scan_24h_movers_only: bool = False
+    scalp_min_confidence: int = 78
+    live_min_confidence: int = 75
+    normal_min_confidence: int = 75
+    notify_min_confidence: int = 82
+    signal_cooldown_minutes: int = 30
+    scalp_holding_minutes: int = 15
+    prioritize_meme_coins: bool = False
+    mover_min_confidence: int = 78
+    meme_min_confidence: int = 80
     mover_min_volume_usdt: float = 1_500_000.0  # include volatile memes like Binance Markets tab
     mover_min_change_pct: float = 2.5  # fast movers only — floor for |24h %|
 
@@ -109,8 +116,8 @@ class Settings(BaseSettings):
     max_spread_pct: float = 0.10
     max_funding_rate_pct: float = 0.08
 
-    # Scanner — every 1 minute for 1m dip/top scalp
-    scan_interval_seconds: int = 60
+    # Scanner — every 5 minutes for quality setups
+    scan_interval_seconds: int = 300
 
     # Auto-disable setups that keep losing (aggressive)
     setup_disable_min_trades: int = 3
@@ -126,10 +133,14 @@ class Settings(BaseSettings):
     binance_api_secret: str = ""
     binance_futures_testnet: bool = False
     auto_execute_trades: bool = False
-    auto_execute_min_confidence: int = 78
-    max_exchange_trades_per_day: int = 150
+    auto_execute_min_confidence: int = 85
+    max_exchange_trades_per_day: int = 10
     max_exchange_open_positions: int = 1
     trading_paused_default: bool = True
+
+    @property
+    def core_pairs_list(self) -> list[str]:
+        return [p.strip().upper() for p in self.core_scan_pairs.split(",") if p.strip()]
 
     @property
     def cors_origin_list(self) -> list[str]:
