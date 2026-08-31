@@ -78,8 +78,8 @@ def _trading_payload(client_id: str | None = None) -> dict:
         "scalp_rr_ratio": s.scalp_rr_ratio,
         "slippage_pct": s.slippage_pct,
         "target_profit_note": (
-            f"Quality signals · max {s.max_take_signals_per_day}/day · BTC ETH Gold + movers · "
-            f"₹{s.risk_per_trade_inr:.0f} risk · backtest required"
+            f"Alpha Engine · max {s.max_take_signals_per_day}/day · 3+ confluence · "
+            f"1:2 R:R · ₹{s.risk_per_trade_inr:.0f} risk (1–2%) · backtest required"
         ),
         "max_signals_per_day": s.max_take_signals_per_day,
         "signals_today": count_signals_today(),
@@ -134,9 +134,9 @@ def _trading_payload(client_id: str | None = None) -> dict:
         "exchange": "Binance USDT Perpetual",
         "trading_style": s.trading_style,
         "why_this_trade": (
-            f"Quality setups on BTC · ETH · Gold + top movers. "
-            f"Max {s.max_take_signals_per_day} signals/day · scan every {round(s.scan_interval_seconds / 60)} min. "
-            f"Backtest gate {s.backtest_min_win_rate:.0f}%+ win rate · min {s.scalp_min_confidence}% confidence."
+            f"Alpha Engine — max {s.max_take_signals_per_day} quality signals/day · "
+            f"3+ confluence · 1:2 min R:R · HTF bias + backtest gate · "
+            f"BTC · ETH · Gold + movers · scan every {round(s.scan_interval_seconds / 60)} min."
             + (
                 " LIVE AUTO-TRADE ON — uses your Binance API keys."
                 if client_view and client_view.get("live_auto_trade")

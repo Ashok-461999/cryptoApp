@@ -203,7 +203,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _experience,
+                key: ValueKey(_experience),
+                initialValue: _experience,
                 dropdownColor: AppColors.card,
                 style: const TextStyle(color: AppColors.text),
                 decoration: const InputDecoration(labelText: 'Trading style'),
@@ -481,12 +482,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Text('How to win', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
               SizedBox(height: 8),
               Text(
-                '• Max 10 quality signals/day · BTC · ETH · Gold + movers\n'
-                '• Every signal passes backtest gate before shown\n'
-                '• Paper wallet \$100 — balance updates after each trade\n'
-                '• Live auto-trade: add your Binance API keys in Settings\n'
-                '• Higher confidence only (78%+) · 5 min scan interval\n'
-                '• Premium subscription for live keys — coming soon',
+                '• Alpha Engine: max 5 quality signals/day · 3+ confluence required\n'
+                '• Every signal: HTF bias + backtest gate + min 1:2 R:R\n'
+                '• BTC · ETH · Gold + top movers · 5 min scan\n'
+                '• Paper wallet \$100 — balance compounds after each trade\n'
+                '• Live auto-trade: Binance API keys in Settings (premium later)\n'
+                '• NO TRADE is normal — quality over quantity builds trust',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.55),
               ),
             ],

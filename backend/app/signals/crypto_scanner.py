@@ -32,12 +32,21 @@ from app.signals.regime import detect_regime
 from app.signals.setups import SETUP_FUNCTIONS
 from app.signals.sl_levels import normalize_stop_loss
 from app.signals.backtest_gate import passes_backtest_gate
+from app.signals.alpha_engine import (
+    alpha_no_trade_reason,
+    compute_confluence,
+    enrich_alpha_payload,
+    htf_bias,
+    loss_cooldown_risk_multiplier,
+)
 from app.signals.trade_decision import PERMANENTLY_DISABLED_SETUPS, SETUP_PRIORITY, TOP_SETUPS, evaluate_trade_decision
+from app.services.signal_tracker import count_open_reference_trades, has_open_trade_on_symbol
 
 logger = logging.getLogger(__name__)
 
 STRUCTURE_TF = "5m"
 ENTRY_TF = "1m"
+HTF_TF = "1h"
 LOOKBACK = 120
 
 _CATEGORY_ORDER = {"mover": 0, "meme": 0, "major": 1, "alt": 2}
@@ -423,20 +432,26 @@ class CryptoScanner:
     def _scan_symbol(self, sym: WatchlistSymbol, settings) -> list[dict]:
         struct_candles = futures_client.get_futures_candles(sym.pair, STRUCTURE_TF, LOOKBACK)
         entry_candles = futures_client.get_futures_candles(sym.pair, ENTRY_TF, 60)
+        htf_candles = futures_client.get_futures_candles(sym.pair, HTF_TF, 80)
         if len(struct_candles) < 60:
             return []
 
         df = futures_client.candles_to_df(struct_candles)
+        htf_df = futures_client.candles_to_df(htf_candles)
+        htf = htf_bias(htf_df)
         regime = detect_regime(df)
         atr_p = atr_pct(df)
         swing_high, swing_low = swing_high_low(df)
         bar_5m = df.iloc[-1]
         disabled_setups = get_disabled_setups()
         funding = futures_client.get_funding_rate(sym.pair)
+        funding_signed = futures_client.get_signed_funding_rate(sym.pair)
         if funding > settings.max_funding_rate_pct:
             return []
         if sym.spread_pct > settings.max_spread_pct:
             return []
+        open_positions = count_open_reference_trades()
+        symbol_open = has_open_trade_on_symbol(sym.pair)
 
         results: list[dict] = []
         entry_df = futures_client.candles_to_df(entry_candles)
@@ -500,6 +515,26 @@ class CryptoScanner:
                 live_cap = get_live_capital_usdt(settings)
                 confidence = decision["take_confidence"]
 
+                rr = scalp_rr_for_confidence(confidence, settings)
+                alpha_reason = alpha_no_trade_reason(
+                    setup_name=setup_name,
+                    result=result,
+                    regime=regime,
+                    htf=htf,
+                    direction=direction,
+                    rr=rr,
+                    spread_pct=sym.spread_pct,
+                    funding_signed_pct=funding_signed,
+                    open_positions=open_positions,
+                    symbol_has_open=symbol_open,
+                    settings=settings,
+                )
+                if alpha_reason:
+                    continue
+
+                risk_mult = loss_cooldown_risk_multiplier(settings)
+                risk_usdt = fixed_risk_usdt(settings) * risk_mult
+
                 plan = plan_crypto_futures(
                     symbol=sym.pair,
                     direction=direction,
@@ -508,7 +543,7 @@ class CryptoScanner:
                     target_1=entry,
                     target_2=entry,
                     capital_usdt=live_cap,
-                    risk_usdt=fixed_risk_usdt(settings),
+                    risk_usdt=risk_usdt,
                     risk_usdt_max=settings.risk_per_trade_usdt_max,
                     max_deploy_pct=per_trade_deploy_pct(live_cap, settings),
                     available_usdt=get_available_usdt(settings),
@@ -540,6 +575,10 @@ class CryptoScanner:
                     continue
                 if not passes_fee_gate(tp_net, plan.notional_usdt, settings):
                     continue
+
+                confluence = compute_confluence(
+                    setup_name, result, regime, htf, direction, rr, settings,
+                )
 
                 min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
                 if confidence <= min_conf:
@@ -593,6 +632,7 @@ class CryptoScanner:
                     "status": "LIVE",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "funding_rate_pct": round(funding, 4),
+                    "loss_cooldown_active": risk_mult < 1.0,
                     "max_loss_inr": round(plan.max_loss_usdt * settings.usdt_to_inr, 0),
                     "target_pnl_inr": round(tp_net * settings.usdt_to_inr, 0),
                     "target_profit_inr": round(tp_net * settings.usdt_to_inr, 0),
@@ -609,6 +649,12 @@ class CryptoScanner:
                     "spread_warning": sym.spread_pct > 0.1,
                     "trading_style": settings.trading_style,
                 })
+                enrich_alpha_payload(
+                    signal,
+                    htf=htf,
+                    confluence=confluence,
+                    funding_signed_pct=funding_signed,
+                )
                 results.append(signal)
 
         if not results:

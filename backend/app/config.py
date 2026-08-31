@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     max_deploy_pct: float = 25.0
     usdt_to_inr: float = 83.0
     trading_style: str = "quality"
-    min_rr_for_take: float = 1.5
-    normal_min_rr: float = 1.2
+    min_rr_for_take: float = 2.0
+    normal_min_rr: float = 2.0
     leverage_min: int = 10
     leverage_max: int = 15
     leverage_hq_min: int = 12
@@ -84,10 +84,10 @@ class Settings(BaseSettings):
     database_url: str = ""
     sqlite_path: str = "./data/cryptoapp.db"
 
-    # Signal limits — max 10 quality signals/day
-    max_take_signals_per_day: int = 10
-    max_high_priority_signals_per_day: int = 10
-    max_signals_per_scan: int = 2
+    # Signal limits — Alpha Engine: quality over quantity (3–5/day)
+    max_take_signals_per_day: int = 5
+    max_high_priority_signals_per_day: int = 5
+    max_signals_per_scan: int = 1
     high_priority_min_confidence: int = 85
     high_priority_min_rr: float = 1.5
     history_retention_days: int = 7
@@ -113,8 +113,17 @@ class Settings(BaseSettings):
     crypto_paper_trading: bool = False  # live signals — user chooses which to take
     min_volume_usdt: float = 15_000_000.0
     meme_min_volume_usdt: float = 1_500_000.0
-    max_spread_pct: float = 0.10
+    max_spread_pct: float = 0.30
     max_funding_rate_pct: float = 0.08
+    max_funding_extreme_pct: float = 0.10
+
+    # Alpha Engine gates
+    alpha_min_confluence_score: int = 3
+    alpha_min_confluence_categories: int = 3
+    alpha_ranging_min_confluence: int = 4
+    alpha_max_correlated_positions: int = 3
+    loss_cooldown_after_sl: int = 2
+    loss_cooldown_risk_multiplier: float = 0.5
 
     # Scanner — every 5 minutes for quality setups
     scan_interval_seconds: int = 300

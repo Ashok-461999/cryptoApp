@@ -81,6 +81,55 @@ def is_user_taken(t: SignalTrade) -> bool:
     return bool(_payload_dict(t).get("user_taken"))
 
 
+def count_open_reference_trades() -> int:
+    """OPEN reference trades across all symbols (correlated exposure)."""
+    session = get_session()
+    try:
+        return int(
+            session.scalar(
+                select(func.count(SignalTrade.id)).where(SignalTrade.status == "OPEN")
+            )
+            or 0
+        )
+    finally:
+        session.close()
+
+
+def has_open_trade_on_symbol(symbol: str) -> bool:
+    session = get_session()
+    try:
+        row = session.scalar(
+            select(SignalTrade.id).where(
+                SignalTrade.symbol == symbol.upper(),
+                SignalTrade.status == "OPEN",
+            ).limit(1)
+        )
+        return row is not None
+    finally:
+        session.close()
+
+
+def recent_sl_hit_count(limit: int = 2) -> int:
+    """Count most recent consecutive SL hits (for loss cooldown)."""
+    session = get_session()
+    try:
+        trades = session.scalars(
+            select(SignalTrade)
+            .where(SignalTrade.status.in_(("WIN", "LOSS")))
+            .order_by(SignalTrade.closed_at.desc())
+            .limit(limit)
+        ).all()
+    finally:
+        session.close()
+    count = 0
+    for t in trades:
+        if t.close_reason == "SL_HIT" and t.status == "LOSS":
+            count += 1
+        else:
+            break
+    return count
+
+
 def count_signals_today() -> int:
     """All signals emitted today (reference tracking)."""
     start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -322,15 +371,19 @@ def save_signal(signal: dict) -> int | None:
 
 
 def _maybe_breakeven(t: SignalTrade, price: float, settings) -> bool:
-    """Move SL to entry after +0.7R — lock out full losses on reversals."""
+    """Move SL to entry after +1:1 R:R — protect capital per Alpha Engine."""
     payload = _payload_dict(t)
     if payload.get("breakeven_moved"):
         return False
-    unrealized_inr = _compute_unrealized_pnl(t, price) * settings.usdt_to_inr
-    if unrealized_inr < settings.risk_per_trade_usdt * settings.usdt_to_inr * 0.5:
-        return False
     entry = float(t.entry_price or 0)
-    if entry <= 0:
+    stop = float(t.stop_loss_price or 0)
+    if entry <= 0 or stop <= 0:
+        return False
+    risk_usdt = abs(_leveraged_pnl_usdt(
+        float(t.margin_usdt or 0), int(t.leverage or 1), entry, stop,
+    ))
+    unrealized = _compute_unrealized_pnl(t, price)
+    if risk_usdt <= 0 or unrealized < risk_usdt:
         return False
     buf = entry * 0.0008
     if t.direction == "LONG":

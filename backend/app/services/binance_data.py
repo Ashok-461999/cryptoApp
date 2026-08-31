@@ -147,6 +147,12 @@ class BinanceDataClient:
 
     # Futures-only endpoints (not on Vision — use fapi.binance.com)
     def get_funding_rate(self, symbol: str) -> float:
+        """Absolute funding rate in percent (legacy gate)."""
+        signed = self.get_signed_funding_rate(symbol)
+        return abs(signed)
+
+    def get_signed_funding_rate(self, symbol: str) -> float:
+        """Signed funding rate in percent (+ = longs pay shorts)."""
         pair = normalize_pair(symbol)
         try:
             r = httpx.get(
@@ -155,7 +161,7 @@ class BinanceDataClient:
                 timeout=10,
             )
             r.raise_for_status()
-            return abs(float(r.json().get("lastFundingRate") or 0)) * 100
+            return float(r.json().get("lastFundingRate") or 0) * 100
         except Exception:
             return 0.0
 

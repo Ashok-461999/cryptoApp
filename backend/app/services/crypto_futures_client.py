@@ -21,6 +21,9 @@ class CryptoFuturesClient:
     def get_funding_rate(self, symbol: str) -> float:
         return binance_data.get_funding_rate(symbol)
 
+    def get_signed_funding_rate(self, symbol: str) -> float:
+        return binance_data.get_signed_funding_rate(symbol)
+
     def get_price(self, symbol: str) -> float:
         return binance_data.get_price(symbol)
 
