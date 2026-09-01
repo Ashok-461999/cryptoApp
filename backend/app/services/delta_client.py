@@ -53,8 +53,8 @@ class DeltaClient:
             r.raise_for_status()
             data = r.json()
             return data.get("result", data) if isinstance(data, dict) else data
-        except Exception:
-            logger.debug("Delta private %s %s failed", method, path)
+        except Exception as e:
+            logger.warning("Delta private %s %s failed: %s", method, path, e)
             return {}
 
     def get_fills(self, limit: int = 50) -> list[dict]:

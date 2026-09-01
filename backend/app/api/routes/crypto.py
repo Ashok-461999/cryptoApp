@@ -47,6 +47,37 @@ def _active_signals_for_symbol(symbol: str) -> list[dict]:
     return rows
 
 
+@router.get("/delta/status")
+def get_delta_status():
+    """Delta Exchange connectivity — options GEX + API key health."""
+    from app.services.delta_client import delta_client
+    from app.services.delta_exchange import get_options_snapshot
+    from app.signals.delta_alpha import scan_delta_options_signals
+
+    snapshots = {sym: get_options_snapshot(sym) for sym in ("BTCUSDT", "ETHUSDT", "SOLUSDT")}
+    fills = delta_client.get_fills(5) if delta_client.is_configured() else []
+    preview = scan_delta_options_signals()
+    return {
+        "api_configured": delta_client.is_configured(),
+        "base_url": get_settings().delta_exchange_base_url,
+        "options": {
+            sym: {
+                "available": snapshots[sym].get("available"),
+                "reason": snapshots[sym].get("reason"),
+                "summary": snapshots[sym].get("summary"),
+                "flow_bias": (snapshots[sym].get("options_flow") or {}).get("flow_bias"),
+            }
+            for sym in snapshots
+        },
+        "recent_fills": len(fills),
+        "options_signals_ready": len(preview),
+        "options_preview": [
+            {"symbol": s["symbol"], "setup": s["setup"], "grade": s["signal_grade"], "score": s["confluence_score"]}
+            for s in preview[:5]
+        ],
+    }
+
+
 @router.get("/candles")
 def get_candles(
     symbol: str = Query(..., description="e.g. BTCUSDT"),
@@ -64,7 +95,7 @@ def get_candles(
 
 
 @router.get("/markets")
-def get_market_overview():
+def get_market_overview(lightweight: bool = Query(False, description="Skip focus tracker for faster first paint")):
     """BTC, ETH, GOLD + meme sentiment strip for home/markets screen."""
     settings = get_settings()
     tickers = binance_data.get_ticker_24hr()
@@ -108,7 +139,7 @@ def get_market_overview():
         meme_coins.append(d)
 
     total = bullish + bearish or 1
-    focus_tracker = get_btc_gold_tracker()
+    focus_tracker = [] if lightweight else get_btc_gold_tracker(force=False)
     tracker_map = {t["symbol"]: t for t in focus_tracker}
     focus = [h for h in highlights if h.get("is_focus")]
     for h in focus:

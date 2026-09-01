@@ -48,7 +48,12 @@ final memeCoinsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
 
 final marketsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   ref.watch(serverUrlProvider);
-  return ref.read(apiServiceProvider).fetchMarkets();
+  return ref.read(apiServiceProvider).fetchMarkets(lightweight: false);
+});
+
+final marketsLightProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  ref.watch(serverUrlProvider);
+  return ref.read(apiServiceProvider).fetchMarkets(lightweight: true);
 });
 
 final marketNewsProvider = FutureProvider<Map<String, dynamic>>((ref) async {

@@ -47,6 +47,7 @@ class MarketPrepPair {
   final double changePct24h;
   final String trend;
   final double fundingPct;
+  final double oiUsdt;
   final double liqAbove;
   final double liqBelow;
 
@@ -57,6 +58,7 @@ class MarketPrepPair {
     required this.changePct24h,
     required this.trend,
     required this.fundingPct,
+    required this.oiUsdt,
     required this.liqAbove,
     required this.liqBelow,
   });
@@ -70,6 +72,7 @@ class MarketPrepPair {
       changePct24h: d(j['change_pct_24h']),
       trend: j['trend']?.toString() ?? 'sideways',
       fundingPct: d(j['funding_pct']),
+      oiUsdt: d(j['oi_usdt']),
       liqAbove: d(j['liq_above']),
       liqBelow: d(j['liq_below']),
     );

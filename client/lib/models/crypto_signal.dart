@@ -91,6 +91,9 @@ class CryptoSignal {
   final String holdingStyle;
   final Map<String, dynamic> predictionStatus;
   final String invalidation;
+  final Map<String, dynamic> alphaReport;
+  final double targetMoveUsdt;
+  final Map<String, dynamic> straddleSetup;
 
   CryptoSignal({
     required this.symbol,
@@ -181,6 +184,9 @@ class CryptoSignal {
     this.holdingStyle = 'Scalp',
     this.predictionStatus = const {},
     this.invalidation = '',
+    this.alphaReport = const {},
+    this.targetMoveUsdt = 0,
+    this.straddleSetup = const {},
   });
 
   factory CryptoSignal.fromJson(Map<String, dynamic> j) {
@@ -275,10 +281,15 @@ class CryptoSignal {
       holdingStyle: j['holding_style']?.toString() ?? 'Scalp',
       predictionStatus: Map<String, dynamic>.from(j['prediction_status'] as Map? ?? {}),
       invalidation: j['invalidation']?.toString() ?? '',
+      alphaReport: Map<String, dynamic>.from(j['alpha_report'] as Map? ?? {}),
+      targetMoveUsdt: d(j['target_move_usdt']),
+      straddleSetup: Map<String, dynamic>.from(j['straddle_setup'] as Map? ?? {}),
     );
   }
 
   bool get isTaken => userTaken;
+
+  bool get isStraddle => direction == 'STRADDLE';
 
   bool get isDeltaEngine => engine == 'delta_binance_alpha' || confluenceScore > 0;
 

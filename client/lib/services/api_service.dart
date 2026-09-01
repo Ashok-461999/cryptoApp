@@ -50,8 +50,9 @@ class ApiService {
     return (body['candles'] as List? ?? []).cast<Map<String, dynamic>>();
   }
 
-  Future<Map<String, dynamic>> fetchMarkets({bool refresh = false}) async {
-    final r = await http.get(Uri.parse('$baseUrl/crypto/markets'));
+  Future<Map<String, dynamic>> fetchMarkets({bool lightweight = false}) async {
+    final q = lightweight ? '?lightweight=true' : '';
+    final r = await http.get(Uri.parse('$baseUrl/crypto/markets$q'));
     if (r.statusCode != 200) throw Exception('Failed to load markets');
     return jsonDecode(r.body) as Map<String, dynamic>;
   }

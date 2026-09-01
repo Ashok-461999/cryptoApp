@@ -595,16 +595,29 @@ def _evaluate_trade(t: SignalTrade, price: float, settings) -> dict | None:
     max_loss = _leveraged_pnl_usdt(margin, leverage, entry, float(t.stop_loss_price or 0))
     target_profit = _leveraged_pnl_usdt(margin, leverage, entry, float(t.target_1_price or 0))
     is_long = t.direction == "LONG"
+    is_straddle = t.direction == "STRADDLE"
 
     unrealized = _compute_unrealized_pnl(t, price)
     unrealized_inr = unrealized * settings.usdt_to_inr
     take_profit_usdt = settings.take_profit_usdt
-    if unrealized >= take_profit_usdt:
+    if unrealized >= take_profit_usdt and not is_straddle:
         return {
             "status": "WIN",
             "pnl_usdt": round(unrealized, 2),
             "close_reason": "PROFIT_TARGET",
         }
+
+    if is_straddle:
+        t_up = float(t.target_1_price or 0)
+        t_down = float(t.target_2_price or 0)
+        move = abs(t_up - entry) if t_up and entry else 0
+        if t_up and price >= t_up:
+            pnl = target_profit or (move / entry * margin * leverage if entry else max_loss)
+            return {"status": "WIN", "pnl_usdt": round(pnl, 2), "close_reason": "STRADDLE_UP"}
+        if t_down and price <= t_down:
+            pnl = target_profit or (move / entry * margin * leverage if entry else max_loss)
+            return {"status": "WIN", "pnl_usdt": round(pnl, 2), "close_reason": "STRADDLE_DOWN"}
+        return None
 
     if is_long:
         if price <= t.stop_loss_price:
@@ -877,6 +890,12 @@ def enrich_trade(
         at_t1 = (
             t.direction == "LONG" and price >= t.target_1_price
         ) or (t.direction == "SHORT" and price <= t.target_1_price)
+        if t.direction == "STRADDLE":
+            at_t1 = (
+                (t.target_1_price and price >= t.target_1_price)
+                or (t.target_2_price and price <= t.target_2_price)
+            )
+            at_sl = False
         data["at_sl"] = at_sl
         data["at_target"] = at_t1
 

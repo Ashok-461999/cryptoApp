@@ -133,6 +133,10 @@ class Settings(BaseSettings):
     loss_cooldown_after_sl: int = 2
     loss_cooldown_risk_multiplier: float = 0.5
 
+    # Target move — straddle wins on ±move (BTC default $1000)
+    alpha_target_move_usdt: float = 1000.0
+    options_prefer_straddle: bool = True
+
     # Delta Exchange India — options/GEX (public + optional API key for fills)
     delta_exchange_base_url: str = "https://api.india.delta.exchange"
     delta_api_key: str = ""

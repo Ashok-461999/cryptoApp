@@ -32,7 +32,7 @@ from app.signals.regime import detect_regime
 from app.signals.setups import SETUP_FUNCTIONS
 from app.signals.sl_levels import normalize_stop_loss
 from app.signals.backtest_gate import passes_backtest_gate
-from app.signals.delta_alpha import delta_no_trade_reason, enrich_delta_signal, grade_cap_reason
+from app.signals.delta_alpha import delta_no_trade_reason, enrich_delta_signal, grade_cap_reason, scan_delta_options_signals
 from app.signals.alpha_engine import loss_cooldown_risk_multiplier
 from app.signals.trade_decision import PERMANENTLY_DISABLED_SETUPS, SETUP_PRIORITY, TOP_SETUPS, evaluate_trade_decision
 from app.services.signal_tracker import count_open_reference_trades, has_open_trade_on_symbol
@@ -206,6 +206,11 @@ class CryptoScanner:
                 except Exception:
                     sym = futures[fut]
                     logger.exception("Scan failed for %s", sym.pair)
+
+        try:
+            candidates.extend(scan_delta_options_signals(settings))
+        except Exception:
+            logger.exception("Delta options scan failed")
 
         candidates.sort(key=self._sort_key)
         quality = [
@@ -666,6 +671,8 @@ class CryptoScanner:
                 if gblock:
                     continue
                 signal["confidence"] = max(confidence, min(95, 55 + conf100.score // 2))
+                if conf100.score >= settings.alpha_min_score_100:
+                    signal["notify"] = signal.get("notify") or conf100.score >= 75
                 results.append(signal)
 
         if not results:

@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/live_signals_provider.dart';
 import '../providers/providers.dart';
 import '../screens/signal_chart_screen.dart';
 import '../theme/app_theme.dart';
 import '../utils/price_format.dart';
+import '../widgets/alpha_markets_panel.dart';
 import '../widgets/btc_gold_tracker.dart';
 import '../widgets/trading_chart.dart';
 
@@ -19,12 +21,19 @@ class WatchlistScreen extends ConsumerStatefulWidget {
 
 class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
   Timer? _timer;
+  bool _fullMarkets = false;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 60), (_) {
-      ref.invalidate(marketsProvider);
+    _timer = Timer.periodic(const Duration(seconds: 90), (_) {
+      if (_fullMarkets) ref.invalidate(marketsProvider);
+    });
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _fullMarkets = true);
+        ref.invalidate(marketsProvider);
+      }
     });
   }
 
@@ -38,13 +47,14 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final data = ref.watch(marketsProvider);
+    final live = ref.watch(liveSignalsProvider);
+    final data = ref.watch(_fullMarkets ? marketsProvider : marketsLightProvider);
 
     return RefreshIndicator(
       color: AppColors.accent,
       onRefresh: () async {
-        ref.invalidate(marketsProvider);
-        await ref.read(marketsProvider.future);
+        ref.invalidate(_fullMarkets ? marketsProvider : marketsLightProvider);
+        await ref.read((_fullMarkets ? marketsProvider : marketsLightProvider).future);
       },
       child: data.when(
         data: (d) {
@@ -52,7 +62,10 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
               .cast<Map<String, dynamic>>()
               .where((h) => h['is_focus'] == true || h['base'] == 'BTC' || h['base'] == 'GOLD')
               .toList();
-          final focusTracker = (d['focus_tracker'] as List? ?? []).cast<Map<String, dynamic>>();
+          final focusTracker = (_fullMarkets
+                  ? (d['focus_tracker'] as List? ?? live.focusTracker)
+                  : live.focusTracker)
+              .cast<Map<String, dynamic>>();
           final highlights = (d['highlights'] as List? ?? []).cast<Map<String, dynamic>>();
           final coins = (d['coins'] as List? ?? []).cast<Map<String, dynamic>>();
           final sentiment = d['sentiment'] as Map<String, dynamic>? ?? {};
@@ -63,10 +76,14 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              const Text('Markets', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.text)),
+              const Text('Markets', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.text)),
               const SizedBox(height: 4),
-              const Text('BTC & Gold — live bullish/bearish prediction + strategy line', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+              const Text('Derivatives · funding · liquidation map · BTC & Gold focus', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
               const SizedBox(height: 12),
+              if (live.marketPrep != null) ...[
+                AlphaMarketsPanel(prep: live.marketPrep!),
+                const SizedBox(height: 12),
+              ],
               if (focusTracker.isNotEmpty)
                 BtcGoldTracker(
                   items: focusTracker,

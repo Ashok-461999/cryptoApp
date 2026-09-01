@@ -70,6 +70,8 @@ def _structure_note(regime, swing_high: float, swing_low: float, price: float) -
 def _suggestion(action: str, prediction: str, setup_name: str | None, has_signal: bool, valid_until: datetime) -> str:
     label = _SETUP_LABELS.get(setup_name or "", setup_name or "structure")
     until = valid_until.strftime("%H:%M UTC")
+    if action == "STRADDLE":
+        return f"STRADDLE — long call + long put · ±$1000 move wins · valid until {until}"
     if action == "WAIT":
         return f"WAIT — no clear edge; fresh levels at {until}"
     if has_signal and action == "BUY":
@@ -268,24 +270,56 @@ def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -
 
     entry_dt = now
     levels_source = "structure"
+    target_2 = 0.0
+    move_usdt = 0.0
 
-    if live_fresh:
-        direction = (live.get("direction") or "LONG").upper()
-        action = "BUY" if direction == "LONG" else "SELL"
-        prediction = "bullish" if direction == "LONG" else "bearish"
-        setup_name = live.get("setup") or setup_name
+    settings = get_settings()
+    use_straddle = sym in ("BTCUSDT", "ETHUSDT") and settings.options_prefer_straddle
+
+    if use_straddle and not live_fresh:
+        from app.signals.delta_alpha import movement_usdt_for_symbol, straddle_targets
+
+        move_usdt = movement_usdt_for_symbol(sym, price, settings)
+        t_up, t_down, _ = straddle_targets(price, move_usdt)
+        action = "STRADDLE"
+        direction = "STRADDLE"
+        prediction = "volatile"
         entry = price
-        entry, sl, target = _compute_levels(
-            price=price,
-            direction=direction,
-            proposed_sl=float(live.get("stop_loss_price") or swing_low),
-            bar_low=float(bar["low"]),
-            bar_high=float(bar["high"]),
-            swing_low=swing_low,
-            swing_high=swing_high,
-            atr_val=atr_val,
-            tier=tier,
-        )
+        sl = round(price * 0.992, 8)
+        target = t_up
+        target_2 = t_down
+        confidence = max(68, min(88, 72 + abs(int(mom))))
+        levels_source = "straddle"
+        setup_name = "delta_straddle"
+        label = "Long Straddle"
+    elif live_fresh:
+        direction = (live.get("direction") or "LONG").upper()
+        if direction == "STRADDLE":
+            from app.signals.delta_alpha import movement_usdt_for_symbol
+
+            action = "STRADDLE"
+            prediction = "volatile"
+            move_usdt = float(live.get("target_move_usdt") or movement_usdt_for_symbol(sym, price, settings))
+            entry = float(live.get("entry_price") or price)
+            sl = float(live.get("stop_loss_price") or entry * 0.992)
+            target = float(live.get("target_1_price") or entry + move_usdt)
+            target_2 = float(live.get("target_2_price") or entry - move_usdt)
+        else:
+            action = "BUY" if direction == "LONG" else "SELL"
+            prediction = "bullish" if direction == "LONG" else "bearish"
+            entry = price
+            entry, sl, target = _compute_levels(
+                price=price,
+                direction=direction,
+                proposed_sl=float(live.get("stop_loss_price") or swing_low),
+                bar_low=float(bar["low"]),
+                bar_high=float(bar["high"]),
+                swing_low=swing_low,
+                swing_high=swing_high,
+                atr_val=atr_val,
+                tier=tier,
+            )
+        setup_name = live.get("setup") or setup_name
         confidence = int(live.get("confidence") or 80)
         entry_dt = _parse_ts(live.get("timestamp"), now)
         levels_source = "live_signal"
@@ -342,7 +376,9 @@ def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -
     expected_move_pct = round(abs(target - entry) / entry * 100, 2) if entry > 0 and target > 0 else 0.0
     bullish_pct = confidence if prediction == "bullish" else (100 - confidence if prediction == "bearish" else 50)
 
-    if prediction == "bullish" and target > 0:
+    if action == "STRADDLE" and target_2:
+        exp_low, exp_high = min(target_2, entry), max(target, entry)
+    elif prediction == "bullish" and target > 0:
         exp_low, exp_high = min(entry, price), max(target, swing_high)
     elif prediction == "bearish" and target > 0:
         exp_high, exp_low = max(entry, price), min(target, swing_low)
@@ -351,8 +387,8 @@ def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -
 
     label = _SETUP_LABELS.get(setup_name or "", "Market Structure")
     chart_note = (
-        f"{label} · {'↑' if prediction == 'bullish' else '↓' if prediction == 'bearish' else '↔'} "
-        f"{'expected ' + str(expected_move_pct) + '% to TP1' if action != 'WAIT' else 'no trade yet'}"
+        f"{label} · {'↕ ±$' + str(int(move_usdt)) if action == 'STRADDLE' else '↑' if prediction == 'bullish' else '↓' if prediction == 'bearish' else '↔'} "
+        f"{'expected ' + str(expected_move_pct) + '% to TP1' if action not in ('WAIT', 'STRADDLE') else ('±$' + str(int(move_usdt)) + ' move either way' if action == 'STRADDLE' else 'no trade yet')}"
     )
 
     data = {
@@ -369,6 +405,8 @@ def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -
         "entry_price": round(entry, 8) if action != "WAIT" else None,
         "stop_loss_price": round(sl, 8) if action != "WAIT" else None,
         "target_1_price": round(target, 8) if action != "WAIT" else None,
+        "target_2_price": round(target_2, 8) if action == "STRADDLE" and target_2 else None,
+        "target_move_usdt": round(move_usdt, 1) if move_usdt else None,
         "entry_time": entry_dt.isoformat(),
         "valid_until": valid_until.isoformat(),
         "levels_ttl_minutes": ttl,
@@ -387,6 +425,8 @@ def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -
             "entry": round(entry, 8) if action != "WAIT" else None,
             "stop_loss": round(sl, 8) if action != "WAIT" else None,
             "target": round(target, 8) if action != "WAIT" else None,
+            "target_2": round(target_2, 8) if action == "STRADDLE" and target_2 else None,
+            "target_move_usdt": round(move_usdt, 1) if move_usdt else None,
             "expected_move_low": round(exp_low, 8),
             "expected_move_high": round(exp_high, 8),
         },
@@ -396,6 +436,8 @@ def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -
             "strategy_line": round(entry, 8) if action != "WAIT" else round(mid, 8),
             "stop_loss": round(sl, 8) if action != "WAIT" else None,
             "target": round(target, 8) if action != "WAIT" else None,
+            "target_2": round(target_2, 8) if action == "STRADDLE" and target_2 else None,
+            "target_move_usdt": round(move_usdt, 1) if move_usdt else None,
             "expected_move_low": round(exp_low, 8),
             "expected_move_high": round(exp_high, 8),
             "prediction": prediction,

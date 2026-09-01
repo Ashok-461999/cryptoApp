@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.config import get_settings
 from app.services.binance_data import binance_data
@@ -10,10 +10,23 @@ from app.services.binance_derivatives import get_derivatives_snapshot
 from app.services.macro_snapshot import get_macro_snapshot
 from app.services.market_news import fetch_market_news
 
+_CACHE_TTL = timedelta(minutes=5)
+_prep_cache: dict = {"at": None, "payload": None}
 
-def build_market_prep(signals_today: int = 0) -> dict:
+
+def build_market_prep(signals_today: int = 0, *, force: bool = False) -> dict:
     settings = get_settings()
     now = datetime.now(timezone.utc)
+    if not force and _prep_cache["payload"] and _prep_cache["at"]:
+        age = now - _prep_cache["at"]
+        if age < _CACHE_TTL:
+            cached = dict(_prep_cache["payload"])
+            cached["signals_today"] = signals_today
+            cached["headline"] = (
+                f"No high-probability setups yet ({signals_today}/{settings.max_take_signals_per_day}). "
+                "Watching BTC, Gold & ETH for sweep + structure."
+            )
+            return cached
     news = fetch_market_news(20)
     macro = get_macro_snapshot()
     top_news = [
@@ -65,7 +78,7 @@ def build_market_prep(signals_today: int = 0) -> dict:
         except Exception:
             continue
 
-    return {
+    result = {
         "generated_at": now.isoformat(),
         "signals_today": signals_today,
         "signal_cap": settings.max_take_signals_per_day,
@@ -86,3 +99,6 @@ def build_market_prep(signals_today: int = 0) -> dict:
             "Educational analysis only."
         ),
     }
+    _prep_cache["at"] = now
+    _prep_cache["payload"] = result
+    return result

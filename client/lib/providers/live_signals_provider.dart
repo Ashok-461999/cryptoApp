@@ -23,6 +23,7 @@ class LiveSignalsState {
   final String? error;
   final String? lastClosedMessage;
   final MarketPrep? marketPrep;
+  final List<Map<String, dynamic>> focusTracker;
 
   const LiveSignalsState({
     this.signals = const [],
@@ -36,6 +37,7 @@ class LiveSignalsState {
     this.error,
     this.lastClosedMessage,
     this.marketPrep,
+    this.focusTracker = const [],
   });
 
   LiveSignalsState copyWith({
@@ -50,6 +52,7 @@ class LiveSignalsState {
     String? error,
     String? lastClosedMessage,
     MarketPrep? marketPrep,
+    List<Map<String, dynamic>>? focusTracker,
   }) {
     return LiveSignalsState(
       signals: signals ?? this.signals,
@@ -63,6 +66,7 @@ class LiveSignalsState {
       error: error,
       lastClosedMessage: lastClosedMessage,
       marketPrep: marketPrep ?? this.marketPrep,
+      focusTracker: focusTracker ?? this.focusTracker,
     );
   }
 }
@@ -172,7 +176,12 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
         .toList();
 
     for (final sig in list) {
-      final isBest = sig.isHighPriority || sig.notify || sig.signalGrade == 'A+';
+      final isBest = sig.isHighPriority ||
+          sig.notify ||
+          sig.signalGrade == 'A+' ||
+          sig.confluenceScore >= 70 ||
+          sig.direction == 'STRADDLE' ||
+          sig.instrumentType.toLowerCase().contains('options');
       if (!isBest) continue;
       final key = '${sig.symbol}:${sig.setup}:${sig.tradeId ?? sig.timestamp}';
       if (_notifiedKeys.contains(key)) continue;
@@ -193,7 +202,10 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
     }
 
     final prepRaw = data['market_prep'] as Map<String, dynamic>?;
-    final marketPrep = prepRaw != null ? MarketPrep.fromJson(prepRaw) : null;
+    final marketPrep = prepRaw != null ? MarketPrep.fromJson(prepRaw) : state.marketPrep;
+    final focusRaw = (data['focus_tracker'] as List? ?? state.focusTracker)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
 
     state = state.copyWith(
       signals: list,
@@ -206,6 +218,7 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
       connected: true,
       error: null,
       marketPrep: marketPrep,
+      focusTracker: focusRaw.isNotEmpty ? focusRaw : state.focusTracker,
     );
   }
 

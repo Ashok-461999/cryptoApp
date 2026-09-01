@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config import get_settings
+from app.services.focus_tracker import get_btc_gold_tracker
 from app.services.signal_tracker import count_signals_today, count_user_takes_today, get_trade_history
 from app.services.market_prep import build_market_prep
 from app.signals.crypto_scanner import crypto_scanner
@@ -30,6 +31,7 @@ def _snapshot_payload(prices: dict[str, float]) -> dict:
         "recent_closed": _recent_closed_trades(),
         "engine": "delta_binance_alpha",
     }
+    payload["focus_tracker"] = get_btc_gold_tracker(force=False)
     if len(signals) < 5:
         payload["market_prep"] = build_market_prep(signals_today=take_count)
     return payload

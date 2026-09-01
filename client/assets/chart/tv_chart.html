@@ -139,7 +139,12 @@
         addLine(lv.strategyLine, COLORS.strategy, 'Strategy', true);
         addLine(lv.entry, COLORS.entry, 'Entry', true);
         addLine(lv.stopLoss, COLORS.sl, 'SL', false);
-        addLine(lv.target, COLORS.target, 'T1', true);
+        if (lv.isStraddle) {
+          addLine(lv.target, COLORS.gold, 'TP ↑', true);
+          addLine(lv.target2, COLORS.gold, 'TP ↓', true);
+        } else {
+          addLine(lv.target, COLORS.target, 'T1', true);
+        }
 
         chart.timeScale().fitContent();
       } catch (e) {

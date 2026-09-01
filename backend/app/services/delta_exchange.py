@@ -30,6 +30,63 @@ def _underlying(symbol: str) -> str | None:
     return _SYMBOL_MAP.get(symbol.upper())
 
 
+def pick_atm_straddle(tickers: list[dict], spot: float) -> dict[str, Any] | None:
+    """Nearest-expiry ATM call + put for a long straddle on Delta."""
+    if not tickers or spot <= 0:
+        return None
+    expiry = _nearest_expiry(tickers)
+    if not expiry:
+        return None
+    pool = [t for t in tickers if str(t.get("symbol", "")).endswith(f"-{expiry}")]
+    strikes = sorted({_f(t.get("strike_price")) for t in pool if _f(t.get("strike_price")) > 0})
+    if not strikes:
+        return None
+    atm = min(strikes, key=lambda k: abs(k - spot))
+    call_t = put_t = None
+    for t in pool:
+        if _f(t.get("strike_price")) != atm:
+            continue
+        ctype = (t.get("contract_type") or "").lower()
+        if "call" in ctype:
+            call_t = t
+        elif "put" in ctype:
+            put_t = t
+    if not call_t or not put_t:
+        return None
+    call_sym = str(call_t.get("symbol") or "")
+    put_sym = str(put_t.get("symbol") or "")
+    call_prem = _f(call_t.get("mark_price") or call_t.get("close"))
+    put_prem = _f(put_t.get("mark_price") or put_t.get("close"))
+    return {
+        "strategy": "Long Straddle",
+        "action": "BUY_BOTH",
+        "strike": round(atm, 2),
+        "expiry": expiry,
+        "spot": round(spot, 2),
+        "exchange": "Delta Exchange India",
+        "legs": [
+            {
+                "side": "BUY",
+                "type": "CALL",
+                "symbol": call_sym,
+                "product_id": call_t.get("product_id"),
+                "premium": round(call_prem, 2),
+                "qty": 1,
+            },
+            {
+                "side": "BUY",
+                "type": "PUT",
+                "symbol": put_sym,
+                "product_id": put_t.get("product_id"),
+                "premium": round(put_prem, 2),
+                "qty": 1,
+            },
+        ],
+        "total_premium": round(call_prem + put_prem, 2),
+        "instruction": f"BUY 1× {call_sym} + BUY 1× {put_sym} (same strike {atm:.0f}, expiry {expiry})",
+    }
+
+
 def _fetch_tickers(underlying: str) -> list[dict]:
     try:
         r = httpx.get(
@@ -225,6 +282,7 @@ def get_options_snapshot(symbol: str) -> dict[str, Any]:
 
     gex = _compute_gex(tickers, spot) if spot > 0 else {}
     flow = _detect_whale_flow(tickers, spot)
+    atm_straddle = pick_atm_straddle(tickers, spot) if spot > 0 else None
     from app.services.delta_client import delta_client
     if delta_client.is_configured():
         fills = delta_client.get_fills(30)
@@ -247,6 +305,7 @@ def get_options_snapshot(symbol: str) -> dict[str, Any]:
         "expiry": expiry or "nearest",
         "options": gex,
         "options_flow": flow,
+        "atm_straddle": atm_straddle,
         "strategy_hint": _options_strategy_hint(gex, flow),
         "summary": (
             f"Zero γ {gex.get('zero_gamma', 0):.0f} · "

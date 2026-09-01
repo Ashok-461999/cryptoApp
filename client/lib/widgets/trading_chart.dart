@@ -13,6 +13,8 @@ class TradingChart extends StatefulWidget {
   final double? entry;
   final double? stopLoss;
   final double? target;
+  final double? target2;
+  final bool isStraddle;
   final double? support;
   final double? resistance;
   final double? strategyLine;
@@ -28,6 +30,8 @@ class TradingChart extends StatefulWidget {
     this.entry,
     this.stopLoss,
     this.target,
+    this.target2,
+    this.isStraddle = false,
     this.support,
     this.resistance,
     this.strategyLine,
@@ -80,6 +84,8 @@ class _TradingChartState extends State<TradingChart> {
         'entry': widget.entry,
         'stopLoss': widget.stopLoss,
         'target': widget.target,
+        'target2': widget.target2,
+        'isStraddle': widget.isStraddle,
         'support': widget.support,
         'resistance': widget.resistance,
         'strategyLine': widget.strategyLine,

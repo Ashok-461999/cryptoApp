@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/crypto_signal.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
+import '../widgets/alpha_signal_report.dart';
 import '../widgets/trading_chart.dart';
 
 /// Full trading chart screen — tap any signal to see entry reason + chart.
@@ -16,6 +17,7 @@ class SignalChartScreen extends ConsumerStatefulWidget {
   final double? entry;
   final double? stopLoss;
   final double? target;
+  final double? target2;
   final List<String> validityPoints;
   final String? decisionReason;
   final Map<String, dynamic>? chartLevels;
@@ -33,6 +35,7 @@ class SignalChartScreen extends ConsumerStatefulWidget {
     this.entry,
     this.stopLoss,
     this.target,
+    this.target2,
     this.validityPoints = const [],
     this.decisionReason,
     this.chartLevels,
@@ -50,8 +53,10 @@ class SignalChartScreen extends ConsumerStatefulWidget {
         entry: s.entryPrice,
         stopLoss: s.stopLossPrice,
         target: s.target1Price,
+        target2: s.isStraddle ? s.target2Price : null,
         validityPoints: s.validityPoints,
         decisionReason: s.decisionReason,
+        prediction: s.prediction,
       );
 
   @override
@@ -94,12 +99,16 @@ class _SignalChartScreenState extends ConsumerState<SignalChartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isLong = (widget.direction ?? 'LONG') == 'LONG';
-    final dirColor = isLong ? AppColors.profit : AppColors.loss;
+    final direction = widget.direction ?? 'LONG';
+    final isStraddle = direction == 'STRADDLE';
+    final isLong = !isStraddle && direction == 'LONG';
+    final dirColor = isStraddle ? AppColors.gold : (isLong ? AppColors.profit : AppColors.loss);
     final chart = widget.chartLevels;
     double? d(dynamic v) => (v is num) ? v.toDouble() : double.tryParse('$v');
-    final support = d(chart?['support']);
-    final resistance = d(chart?['resistance']);
+    final support = isStraddle ? null : d(chart?['support']);
+    final resistance = isStraddle ? null : d(chart?['resistance']);
+    final tpUp = isStraddle ? (widget.target ?? widget.signal?.target1Price) : null;
+    final tpDown = isStraddle ? (widget.target2 ?? widget.signal?.target2Price) : null;
     final strategyLine = d(chart?['strategy_line']);
     final expLow = d(chart?['expected_move_low']);
     final expHigh = d(chart?['expected_move_high']);
@@ -142,7 +151,9 @@ class _SignalChartScreenState extends ConsumerState<SignalChartScreen> {
               candles: _candles,
               entry: widget.entry,
               stopLoss: widget.stopLoss,
-              target: widget.target,
+              target: isStraddle ? tpUp : widget.target,
+              target2: isStraddle ? tpDown : null,
+              isStraddle: isStraddle,
               support: support,
               resistance: resistance,
               strategyLine: strategyLine,
@@ -194,52 +205,27 @@ class _SignalChartScreenState extends ConsumerState<SignalChartScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 14),
-          PremiumCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const           Text('WHY WE TOOK THIS ENTRY', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 1)),
-                const SizedBox(height: 10),
-                if (widget.signal != null && widget.signal!.timestamp.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      'Signal given: ${widget.signal!.signalTimeLabel}',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.accentBlue),
-                    ),
-                  ),
-                Text('Setup: $_setupLabel', style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
-                if (widget.decisionReason != null && widget.decisionReason!.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(widget.decisionReason!, style: const TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.4)),
-                ],
-                const SizedBox(height: 12),
-                if (widget.entry != null) _LevelRow('Entry', _formatPrice(widget.entry!), AppColors.accent),
-                if (widget.stopLoss != null) _LevelRow('Stop Loss', _formatPrice(widget.stopLoss!), AppColors.loss),
-                if (widget.target != null) _LevelRow('Target 1', _formatPrice(widget.target!), AppColors.profit),
-              ],
+          if (widget.signal != null) ...[
+            const SizedBox(height: 14),
+            PremiumCard(
+              child: AlphaSignalReport.fromSignal(widget.signal!, _formatPrice),
             ),
-          ),
-          if (widget.validityPoints.isNotEmpty) ...[
-            const SizedBox(height: 12),
+          ] else ...[
+            const SizedBox(height: 14),
             PremiumCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('VALIDITY CHECKLIST', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.accentBlue, letterSpacing: 1)),
+                  const Text('TRADE LEVELS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 1)),
                   const SizedBox(height: 10),
-                  ...widget.validityPoints.map((p) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.check_circle_outline, size: 14, color: AppColors.profit),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(p, style: const TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.35))),
-                          ],
-                        ),
-                      )),
+                  if (widget.entry != null) _LevelRow('Entry', _formatPrice(widget.entry!), AppColors.accent),
+                  if (isStraddle) ...[
+                    if (tpUp != null) _LevelRow('TP ↑ WIN', _formatPrice(tpUp), AppColors.gold),
+                    if (tpDown != null) _LevelRow('TP ↓ WIN', _formatPrice(tpDown), AppColors.gold),
+                  ] else ...[
+                    if (widget.stopLoss != null) _LevelRow('Stop Loss', _formatPrice(widget.stopLoss!), AppColors.loss),
+                    if (widget.target != null) _LevelRow('Target 1', _formatPrice(widget.target!), AppColors.profit),
+                  ],
                 ],
               ),
             ),
@@ -291,7 +277,9 @@ void openSymbolChart(
       builder: (_) => SignalChartScreen(
         symbol: symbol,
         direction: signal?['direction'] as String? ??
-            (tracker?['action'] == 'BUY'
+            (tracker?['action'] == 'STRADDLE'
+                ? 'STRADDLE'
+                : tracker?['action'] == 'BUY'
                 ? 'LONG'
                 : tracker?['action'] == 'SELL'
                     ? 'SHORT'
@@ -300,6 +288,7 @@ void openSymbolChart(
         entry: d(signal?['entry_price']) ?? d(tracker?['entry_price']) ?? d(chart?['strategy_line']),
         stopLoss: d(signal?['stop_loss_price']) ?? d(tracker?['stop_loss_price']) ?? d(chart?['stop_loss']),
         target: d(signal?['target_1_price']) ?? d(tracker?['target_1_price']) ?? d(chart?['target']),
+        target2: d(signal?['target_2_price']) ?? d(tracker?['target_2_price']) ?? d(chart?['target_2']),
         validityPoints: validityPoints,
         decisionReason: signal?['decision_reason'] as String? ?? tracker?['suggestion'] as String?,
         chartLevels: chart,
