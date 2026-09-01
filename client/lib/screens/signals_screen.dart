@@ -9,6 +9,8 @@ import '../providers/live_signals_provider.dart';
 import '../providers/providers.dart';
 import '../screens/signal_chart_screen.dart';
 import '../widgets/btc_gold_tracker.dart';
+import '../widgets/delta_signal_card.dart';
+import '../widgets/market_prep_banner.dart';
 import '../widgets/mini_chart.dart';
 import '../theme/app_theme.dart';
 
@@ -63,6 +65,9 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
     final markets = ref.watch(marketsProvider);
     final filtered = List<CryptoSignal>.from(_applyFilter(live.signals))
       ..sort((a, b) {
+        final as = a.confluenceScore > 0 ? a.confluenceScore : a.confidence;
+        final bs = b.confluenceScore > 0 ? b.confluenceScore : b.confidence;
+        if (as != bs) return bs.compareTo(as);
         final ah = a.isHighPriority ? 0 : 1;
         final bh = b.isHighPriority ? 0 : 1;
         if (ah != bh) return ah.compareTo(bh);
@@ -85,9 +90,9 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ScalpTrack', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.text)),
+                        Text('Delta × Binance Alpha', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.text)),
                         SizedBox(height: 4),
-                        Text('Live signals · you choose TAKE or SKIP', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                        Text('Confluence 70+ · derivatives · news · you choose TAKE or SKIP', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
                       ],
                     ),
                   ),
@@ -176,6 +181,13 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
                 ),
               ),
             ),
+          if (live.marketPrep != null && live.signals.length < 5)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: MarketPrepBanner(prep: live.marketPrep!),
+              ),
+            ),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -218,7 +230,7 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
               delegate: SliverChildBuilderDelegate(
                 (ctx, i) => Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: _CryptoSignalCard(
+                  child: DeltaSignalCard(
                     signal: filtered[i],
                     livePrice: live.prices[filtered[i].symbol],
                     formatPrice: _formatPrice,
@@ -307,7 +319,7 @@ class _DailyGoalBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-            const Text('ScalpTrack Live', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.text, fontSize: 20)),
+            const Text('Delta × Binance Alpha', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.text, fontSize: 20)),
           if (!serverOffline && tradingConfig != null) ...[
             const SizedBox(height: 8),
             Container(
@@ -380,7 +392,7 @@ class _DailyGoalBanner extends StatelessWidget {
           ],
           const SizedBox(height: 4),
           Text(
-            'BTC & Gold focus · max $takeCap signals/day · scan every 5 min',
+            'Confluence 70+ gate · BTC & Gold focus · max $takeCap signals/day',
             style: const TextStyle(fontSize: 12, color: AppColors.gold, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),

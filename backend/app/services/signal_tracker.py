@@ -233,6 +233,17 @@ def enrich_live_signals(
         )
         copy["target_pnl_inr"] = t1_inr
         copy["target_profit_note"] = f"Auto bank at ₹{int(get_settings().take_profit_inr)}+ — hold for more upside"
+
+        from app.services.prediction_tracker import update_prediction_status
+        from app.services.signal_management import compute_live_management
+
+        if price > 0:
+            update_prediction_status(copy, price)
+            mgmt = compute_live_management(copy, price)
+            copy["live_management"] = mgmt
+            copy["live_status"] = mgmt.get("status", "ACTIVE")
+            copy["live_status_message"] = f"{mgmt.get('emoji', '🟢')} {mgmt.get('message', '')}"
+
         enriched.append(copy)
     return enriched
 

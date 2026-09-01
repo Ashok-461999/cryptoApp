@@ -59,6 +59,38 @@ class CryptoSignal {
   final double refPnlInr;
   final double livePnlInr;
   final String targetProfitNote;
+  final int confluenceScore;
+  final String confluenceLabel;
+  final String prediction;
+  final String newsHeadline;
+  final String newsSentiment;
+  final int newsSentimentScore;
+  final String newsImpact;
+  final String newsEffect;
+  final String htfBias;
+  final String htfSummary;
+  final Map<String, dynamic> derivatives;
+  final Map<String, dynamic> marketProfile;
+  final double supportPrice;
+  final double resistancePrice;
+  final double target3Price;
+  final double expectedMovePct;
+  final String riskLevel;
+  final int maxLeverageGrade;
+  final List<String> confluenceFactors;
+  final String engine;
+  final String signalHeader;
+  final String confluenceEmoji;
+  final String newsSource;
+  final Map<String, dynamic> structureAnalysis;
+  final Map<String, dynamic> optionsGex;
+  final Map<String, dynamic> liveManagement;
+  final String liveStatusMessage;
+  final List<String> managementRules;
+  final String instrumentType;
+  final String holdingStyle;
+  final Map<String, dynamic> predictionStatus;
+  final String invalidation;
 
   CryptoSignal({
     required this.symbol,
@@ -117,6 +149,38 @@ class CryptoSignal {
     this.refPnlInr = 0,
     this.livePnlInr = 0,
     this.targetProfitNote = '',
+    this.confluenceScore = 0,
+    this.confluenceLabel = '',
+    this.prediction = '',
+    this.newsHeadline = '',
+    this.newsSentiment = 'neutral',
+    this.newsSentimentScore = 0,
+    this.newsImpact = 'low',
+    this.newsEffect = 'neutral',
+    this.htfBias = '',
+    this.htfSummary = '',
+    this.derivatives = const {},
+    this.marketProfile = const {},
+    this.supportPrice = 0,
+    this.resistancePrice = 0,
+    this.target3Price = 0,
+    this.expectedMovePct = 0,
+    this.riskLevel = 'Medium',
+    this.maxLeverageGrade = 3,
+    this.confluenceFactors = const [],
+    this.engine = '',
+    this.signalHeader = '',
+    this.confluenceEmoji = '🟡',
+    this.newsSource = '',
+    this.structureAnalysis = const {},
+    this.optionsGex = const {},
+    this.liveManagement = const {},
+    this.liveStatusMessage = '',
+    this.managementRules = const [],
+    this.instrumentType = 'USDT Perp',
+    this.holdingStyle = 'Scalp',
+    this.predictionStatus = const {},
+    this.invalidation = '',
   });
 
   factory CryptoSignal.fromJson(Map<String, dynamic> j) {
@@ -179,10 +243,48 @@ class CryptoSignal {
       refPnlInr: d(j['ref_pnl_inr']),
       livePnlInr: d(j['live_pnl_inr']),
       targetProfitNote: j['target_profit_note'] ?? '',
+      confluenceScore: i(j['confluence_score']),
+      confluenceLabel: j['confluence_label']?.toString() ?? '',
+      prediction: j['prediction']?.toString() ?? '',
+      newsHeadline: j['news_headline']?.toString() ?? '',
+      newsSentiment: j['news_sentiment']?.toString() ?? 'neutral',
+      newsSentimentScore: i(j['news_sentiment_score']),
+      newsImpact: j['news_impact']?.toString() ?? 'low',
+      newsEffect: j['news_effect']?.toString() ?? 'neutral',
+      htfBias: j['htf_bias']?.toString() ?? '',
+      htfSummary: j['htf_summary']?.toString() ?? '',
+      derivatives: Map<String, dynamic>.from(j['derivatives'] as Map? ?? {}),
+      marketProfile: Map<String, dynamic>.from(j['market_profile'] as Map? ?? {}),
+      supportPrice: d(j['support_price']),
+      resistancePrice: d(j['resistance_price']),
+      target3Price: d(j['target_3_price']),
+      expectedMovePct: d(j['expected_move_pct']),
+      riskLevel: j['risk_level']?.toString() ?? 'Medium',
+      maxLeverageGrade: i(j['max_leverage_grade'] ?? 3),
+      confluenceFactors: (j['confluence_factors'] as List? ?? []).map((e) => '$e').toList(),
+      engine: j['engine']?.toString() ?? '',
+      signalHeader: j['signal_header']?.toString() ?? '',
+      confluenceEmoji: j['confluence_emoji']?.toString() ?? '🟡',
+      newsSource: j['news_source']?.toString() ?? '',
+      structureAnalysis: Map<String, dynamic>.from(j['structure_analysis'] as Map? ?? {}),
+      optionsGex: Map<String, dynamic>.from(j['options_gex'] as Map? ?? {}),
+      liveManagement: Map<String, dynamic>.from(j['live_management'] as Map? ?? {}),
+      liveStatusMessage: j['live_status_message']?.toString() ?? '',
+      managementRules: (j['management_rules'] as List? ?? []).map((e) => '$e').toList(),
+      instrumentType: j['instrument_type']?.toString() ?? 'USDT Perp',
+      holdingStyle: j['holding_style']?.toString() ?? 'Scalp',
+      predictionStatus: Map<String, dynamic>.from(j['prediction_status'] as Map? ?? {}),
+      invalidation: j['invalidation']?.toString() ?? '',
     );
   }
 
   bool get isTaken => userTaken;
+
+  bool get isDeltaEngine => engine == 'delta_binance_alpha' || confluenceScore > 0;
+
+  bool get isHighConfluence => confluenceScore >= 75;
+
+  String get displayGrade => signalGrade.isNotEmpty ? signalGrade : tier;
 
   bool get isHighPriority => priorityTier == 'HIGH';
 

@@ -6,10 +6,33 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.config import get_settings
 from app.services.signal_tracker import count_signals_today, count_user_takes_today, get_trade_history
+from app.services.market_prep import build_market_prep
 from app.signals.crypto_scanner import crypto_scanner
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["websocket"])
+
+
+def _snapshot_payload(prices: dict[str, float]) -> dict:
+    settings = get_settings()
+    signals = crypto_scanner.get_active_signals()
+    take_count = count_signals_today()
+    payload = {
+        "signals": signals,
+        "prices": prices,
+        "total_scanned": crypto_scanner._last_scan_total,
+        "take_count_today": take_count,
+        "user_takes_today": count_user_takes_today(),
+        "take_cap_today": settings.max_take_signals_per_day,
+        "high_priority_count_today": crypto_scanner.high_priority_count_today,
+        "high_priority_cap_today": settings.max_high_priority_signals_per_day,
+        "utc_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "recent_closed": _recent_closed_trades(),
+        "engine": "delta_binance_alpha",
+    }
+    if len(signals) < 5:
+        payload["market_prep"] = build_market_prep(signals_today=take_count)
+    return payload
 
 
 class SignalBroadcaster:
@@ -52,21 +75,9 @@ class SignalBroadcaster:
                 self._clients.remove(ws)
 
     async def broadcast_snapshot(self) -> None:
-        settings = get_settings()
         await self._broadcast({
             "type": "snapshot",
-            "data": {
-                "signals": crypto_scanner.get_active_signals(),
-                "prices": self._prices,
-                "total_scanned": crypto_scanner._last_scan_total,
-                "take_count_today": count_signals_today(),
-                "user_takes_today": count_user_takes_today(),
-                "take_cap_today": settings.max_take_signals_per_day,
-                "high_priority_count_today": crypto_scanner.high_priority_count_today,
-                "high_priority_cap_today": settings.max_high_priority_signals_per_day,
-                "utc_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                "recent_closed": _recent_closed_trades(),
-            },
+            "data": _snapshot_payload(self._prices),
         })
 
     async def connect(self, ws: WebSocket) -> None:
@@ -75,21 +86,9 @@ class SignalBroadcaster:
         await ws.accept()
         self._clients.append(ws)
         sync_tracked_symbols()
-        settings = get_settings()
         await ws.send_json({
             "type": "snapshot",
-            "data": {
-                "signals": crypto_scanner.get_active_signals(),
-                "prices": self._prices,
-                "total_scanned": crypto_scanner._last_scan_total,
-                "take_count_today": count_signals_today(),
-                "user_takes_today": count_user_takes_today(),
-                "take_cap_today": settings.max_take_signals_per_day,
-                "high_priority_count_today": crypto_scanner.high_priority_count_today,
-                "high_priority_cap_today": settings.max_high_priority_signals_per_day,
-                "utc_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                "recent_closed": _recent_closed_trades(),
-            },
+            "data": _snapshot_payload(self._prices),
         })
 
     def disconnect(self, ws: WebSocket) -> None:

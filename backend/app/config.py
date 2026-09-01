@@ -121,9 +121,22 @@ class Settings(BaseSettings):
     alpha_min_confluence_score: int = 2
     alpha_min_confluence_categories: int = 2
     alpha_ranging_min_confluence: int = 3
-    alpha_max_correlated_positions: int = 5
+    alpha_max_correlated_positions: int = 3
+    alpha_min_score_100: int = 70
+    alpha_min_score_100_core: int = 65
+    grade_a_plus_max_leverage: int = 7
+    grade_a_max_leverage: int = 5
+    grade_b_max_leverage: int = 3
+    max_grade_a_plus_per_day: int = 3
+    max_grade_a_per_day: int = 5
+    max_grade_b_per_day: int = 2
     loss_cooldown_after_sl: int = 2
     loss_cooldown_risk_multiplier: float = 0.5
+
+    # Delta Exchange India — options/GEX (public + optional API key for fills)
+    delta_exchange_base_url: str = "https://api.india.delta.exchange"
+    delta_api_key: str = ""
+    delta_api_secret: str = ""
 
     # Scanner — every 5 minutes for quality setups
     scan_interval_seconds: int = 300

@@ -482,11 +482,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Text('How to win', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.text)),
               SizedBox(height: 8),
               Text(
-                '• Alpha Engine: max 5 quality signals/day · 3+ confluence required\n'
-                '• Every signal: HTF bias + backtest gate + min 1:2 R:R\n'
-                '• BTC · ETH · Gold + top movers · 5 min scan\n'
+                '• Delta × Binance Alpha: 70+ confluence score · grade A+/A/B\n'
+                '• Derivatives: OI, funding, L/S ratio, taker flow, liq map\n'
+                '• News sentiment + market profile (POC/VAH/VAL) on every signal\n'
+                '• BTC & Gold focus · max 10 signals/day · 5 min scan\n'
                 '• Paper wallet \$100 — balance compounds after each trade\n'
-                '• Live auto-trade: Binance API keys in Settings (premium later)\n'
+                '• Live auto-trade: Binance API keys in Settings\n'
                 '• NO TRADE is normal — quality over quantity builds trust',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.55),
               ),

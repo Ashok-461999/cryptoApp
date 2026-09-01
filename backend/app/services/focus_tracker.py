@@ -327,7 +327,10 @@ def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -
         target = 0.0
         confidence = max(50, min(65, 55 + abs(int(score))))
 
+    from app.services.binance_derivatives import get_derivatives_snapshot
+
     news = _news_context(base)
+    deriv = get_derivatives_snapshot(sym, swing_high=swing_high, swing_low=swing_low, price=price)
     if action != "WAIT":
         if prediction == "bullish" and news["bias"] == "bearish":
             confidence = max(50, confidence - 5)
@@ -405,6 +408,13 @@ def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -
             "setup": live.get("setup"),
             "confidence": live.get("confidence"),
         } if live_fresh else None,
+        "derivatives": {
+            "open_interest_usdt": deriv.get("open_interest_usdt", 0),
+            "funding_pct_8h": deriv.get("funding_pct_8h", 0),
+            "long_short_ratio": deriv.get("long_short_ratio", 1),
+            "taker_buy_sell_ratio": deriv.get("taker_buy_sell_ratio", 1),
+            "funding_regime": deriv.get("funding_regime", "neutral"),
+        },
     }
 
     _focus_cache[sym] = {"cached_at": now, "data": data}

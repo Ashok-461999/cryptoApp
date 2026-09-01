@@ -5,6 +5,7 @@ from app.config import get_settings
 from app.db.models import database_kind
 from app.services.binance_account import fetch_binance_ui
 from app.services.binance_trading_client import binance_trading
+from app.services.delta_client import delta_client
 from app.services.client_store import (
     client_public_view,
     get_or_create_client,
@@ -131,12 +132,21 @@ def _trading_payload(client_id: str | None = None) -> dict:
         ),
         "mode": "paper" if s.crypto_paper_trading and not binance else "live",
         "database": database_kind(),
-        "exchange": "Binance USDT Perpetual",
+        "exchange": "Binance USDT Perpetual · Delta Options GEX",
+        "delta_keys_configured": delta_client.is_configured(),
+        "delta_exchange_url": s.delta_exchange_base_url,
+        "alpha_engine": "delta_binance_alpha",
+        "alpha_min_score": s.alpha_min_score_100,
+        "grade_caps": {
+            "A+": s.max_grade_a_plus_per_day,
+            "A": s.max_grade_a_per_day,
+            "B": s.max_grade_b_per_day,
+        },
         "trading_style": s.trading_style,
         "why_this_trade": (
-            f"Alpha Engine — max {s.max_take_signals_per_day} quality signals/day · "
-            f"3+ confluence · 1:2 min R:R · HTF bias + backtest gate · "
-            f"BTC · ETH · Gold + movers · scan every {round(s.scan_interval_seconds / 60)} min."
+            f"Delta × Binance Alpha — max {s.max_take_signals_per_day} signals/day · "
+            f"confluence ≥{s.alpha_min_score_100} · GEX + OI + funding + news · "
+            f"BTC & Gold focus · scan every {round(s.scan_interval_seconds / 60)} min."
             + (
                 " LIVE AUTO-TRADE ON — uses your Binance API keys."
                 if client_view and client_view.get("live_auto_trade")

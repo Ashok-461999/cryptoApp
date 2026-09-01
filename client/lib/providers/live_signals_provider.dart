@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/account.dart';
+import '../models/market_prep.dart';
 import '../models/crypto_signal.dart';
 import '../services/notification_service.dart';
 import '../services/server_config.dart';
@@ -21,6 +22,7 @@ class LiveSignalsState {
   final bool connected;
   final String? error;
   final String? lastClosedMessage;
+  final MarketPrep? marketPrep;
 
   const LiveSignalsState({
     this.signals = const [],
@@ -33,6 +35,7 @@ class LiveSignalsState {
     this.connected = false,
     this.error,
     this.lastClosedMessage,
+    this.marketPrep,
   });
 
   LiveSignalsState copyWith({
@@ -46,6 +49,7 @@ class LiveSignalsState {
     bool? connected,
     String? error,
     String? lastClosedMessage,
+    MarketPrep? marketPrep,
   }) {
     return LiveSignalsState(
       signals: signals ?? this.signals,
@@ -58,6 +62,7 @@ class LiveSignalsState {
       connected: connected ?? this.connected,
       error: error,
       lastClosedMessage: lastClosedMessage,
+      marketPrep: marketPrep ?? this.marketPrep,
     );
   }
 }
@@ -187,6 +192,9 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
       );
     }
 
+    final prepRaw = data['market_prep'] as Map<String, dynamic>?;
+    final marketPrep = prepRaw != null ? MarketPrep.fromJson(prepRaw) : null;
+
     state = state.copyWith(
       signals: list,
       recentClosed: closed,
@@ -197,6 +205,7 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
       utcDate: data['utc_date'] as String? ?? '',
       connected: true,
       error: null,
+      marketPrep: marketPrep,
     );
   }
 

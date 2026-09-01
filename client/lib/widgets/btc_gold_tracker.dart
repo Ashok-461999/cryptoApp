@@ -63,6 +63,13 @@ class _FocusTrackerCard extends StatelessWidget {
 
   double? _d(dynamic v) => v is num ? v.toDouble() : double.tryParse('$v');
 
+  String _fmtOi(dynamic v) {
+    final n = _d(v) ?? 0;
+    if (n >= 1e9) return '\$${(n / 1e9).toStringAsFixed(1)}B';
+    if (n >= 1e6) return '\$${(n / 1e6).toStringAsFixed(0)}M';
+    return '\$${n.toStringAsFixed(0)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final base = item['base']?.toString() ?? '';
@@ -86,6 +93,7 @@ class _FocusTrackerCard extends StatelessWidget {
     final hasTrade = action != 'WAIT' && entry != null && entry > 0 && sl != null && sl > 0 && target != null && target > 0;
     final expired = _isExpired(item['valid_until']?.toString());
     final hasLive = item['has_live_signal'] == true;
+    final deriv = item['derivatives'] as Map<String, dynamic>?;
 
     return InkWell(
       onTap: onTap,
@@ -165,6 +173,18 @@ class _FocusTrackerCard extends StatelessWidget {
                 Expanded(child: _MiniLevel('Resist', formatPrice(resistance), AppColors.loss)),
               ],
             ),
+            if (deriv != null && deriv.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(child: _MiniLevel('OI', _fmtOi(deriv['open_interest_usdt']), AppColors.accentBlue)),
+                  const SizedBox(width: 6),
+                  Expanded(child: _MiniLevel('Fund', '${(deriv['funding_pct_8h'] as num?)?.toStringAsFixed(3) ?? '0'}%', AppColors.gold)),
+                  const SizedBox(width: 6),
+                  Expanded(child: _MiniLevel('L/S', '${(deriv['long_short_ratio'] as num?)?.toStringAsFixed(2) ?? '1'}', AppColors.accent)),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             Text(
               hasTrade

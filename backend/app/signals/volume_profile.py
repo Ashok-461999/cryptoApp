@@ -14,6 +14,11 @@ BINS = 24
 VALUE_AREA_PCT = 0.70
 
 
+def profile_levels(df: pd.DataFrame) -> tuple[float, float, float] | None:
+    """Public wrapper — POC, VAL, VAH."""
+    return _profile_levels(df)
+
+
 def _profile_levels(d: pd.DataFrame) -> tuple[float, float, float] | None:
     """Return POC, VAL, VAH from volume-at-price histogram."""
     if len(d) < 20:

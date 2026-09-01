@@ -32,13 +32,8 @@ from app.signals.regime import detect_regime
 from app.signals.setups import SETUP_FUNCTIONS
 from app.signals.sl_levels import normalize_stop_loss
 from app.signals.backtest_gate import passes_backtest_gate
-from app.signals.alpha_engine import (
-    alpha_no_trade_reason,
-    compute_confluence,
-    enrich_alpha_payload,
-    htf_bias,
-    loss_cooldown_risk_multiplier,
-)
+from app.signals.delta_alpha import delta_no_trade_reason, enrich_delta_signal, grade_cap_reason
+from app.signals.alpha_engine import loss_cooldown_risk_multiplier
 from app.signals.trade_decision import PERMANENTLY_DISABLED_SETUPS, SETUP_PRIORITY, TOP_SETUPS, evaluate_trade_decision
 from app.services.signal_tracker import count_open_reference_trades, has_open_trade_on_symbol
 
@@ -64,6 +59,7 @@ class CryptoScanner:
         self._emitted_today: set[str] = set()
         self._skipped_today: set[str] = set()
         self._high_priority_emitted_today: int = 0
+        self._grade_emitted_today: dict[str, int] = {"A+": 0, "A": 0, "B": 0}
         self._last_take_at: dict[str, datetime] = {}
         self._last_scan_total: int = 0
         self._trending_mover_pairs: set[str] = set()
@@ -111,6 +107,7 @@ class CryptoScanner:
             self._emitted_today = set()
             self._skipped_today = set()
             self._high_priority_emitted_today = 0
+            self._grade_emitted_today = {"A+": 0, "A": 0, "B": 0}
             self._take_count_today = 0
 
     def _qualifies_high_priority(self, signal: dict, settings) -> bool:
@@ -254,6 +251,9 @@ class CryptoScanner:
                 self._emitted_today.add(f"{key}:{self._take_count_today}")
                 if sig.get("priority_tier") == "HIGH":
                     self._high_priority_emitted_today += 1
+                grade = sig.get("signal_grade") or sig.get("tier_label") or "B"
+                if grade in self._grade_emitted_today:
+                    self._grade_emitted_today[grade] += 1
                 try:
                     from app.services.trade_executor import execute_signal, is_auto_trade_enabled
 
@@ -445,7 +445,7 @@ class CryptoScanner:
 
         df = futures_client.candles_to_df(struct_candles)
         htf_df = futures_client.candles_to_df(htf_candles)
-        htf = htf_bias(htf_df)
+        htf = None  # computed in delta_alpha enrich
         regime = detect_regime(df)
         atr_p = atr_pct(df)
         swing_high, swing_low = swing_high_low(df)
@@ -523,22 +523,6 @@ class CryptoScanner:
                 confidence = decision["take_confidence"]
 
                 rr = scalp_rr_for_confidence(confidence, settings)
-                alpha_reason = alpha_no_trade_reason(
-                    setup_name=setup_name,
-                    result=result,
-                    regime=regime,
-                    htf=htf,
-                    direction=direction,
-                    rr=rr,
-                    spread_pct=sym.spread_pct,
-                    funding_signed_pct=funding_signed,
-                    open_positions=open_positions,
-                    symbol_has_open=symbol_open,
-                    symbol=sym.pair,
-                    settings=settings,
-                )
-                if alpha_reason:
-                    continue
 
                 risk_mult = loss_cooldown_risk_multiplier(settings)
                 risk_usdt = fixed_risk_usdt(settings) * risk_mult
@@ -585,10 +569,6 @@ class CryptoScanner:
                     bt_meta = {"win_rate": 0, "samples": 0}
                 if not passes_fee_gate(tp_net, plan.notional_usdt, settings):
                     continue
-
-                confluence = compute_confluence(
-                    setup_name, result, regime, htf, direction, rr, settings,
-                )
 
                 min_conf = settings.mover_min_confidence if sym.category in ("meme", "mover") else settings.normal_min_confidence
                 if confidence <= min_conf:
@@ -662,12 +642,30 @@ class CryptoScanner:
                     "spread_warning": sym.spread_pct > 0.1,
                     "trading_style": settings.trading_style,
                 })
-                enrich_alpha_payload(
+                signal, conf100, htf_b, news = enrich_delta_signal(
                     signal,
-                    htf=htf,
-                    confluence=confluence,
-                    funding_signed_pct=funding_signed,
+                    df=df,
+                    htf_df=htf_df,
+                    setup_name=setup_name,
+                    result=result,
+                    regime=regime,
+                    direction=direction,
+                    rr=rr,
+                    funding_signed=funding_signed,
+                    swing_high=swing_high,
+                    swing_low=swing_low,
                 )
+                block = delta_no_trade_reason(
+                    score=conf100, htf=htf_b, direction=direction, news=news, symbol=sym.pair,
+                    open_positions=open_positions, symbol_open=symbol_open,
+                    deriv=signal.get("derivatives"), result=result,
+                )
+                if block:
+                    continue
+                gblock = grade_cap_reason(conf100.grade, self._grade_emitted_today)
+                if gblock:
+                    continue
+                signal["confidence"] = max(confidence, min(95, 55 + conf100.score // 2))
                 results.append(signal)
 
         if not results:
@@ -680,7 +678,7 @@ class CryptoScanner:
                 return []
             items.sort(key=lambda s: (
                 SETUP_PRIORITY.get(s.get("setup", ""), 9),
-                -s.get("confidence", 0),
+                -s.get("confluence_score", s.get("confidence", 0)),
                 -s.get("risk_reward", 0),
             ))
             seen: set[str] = set()
