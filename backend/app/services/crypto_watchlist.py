@@ -189,7 +189,8 @@ def _category(base: str, tier: str) -> str:
 
 
 _CATEGORY_ORDER = {"meme": 0, "major": 1, "alt": 2}
-FOCUS_PAIRS = ("BTCUSDT", "ETHUSDT", "PAXGUSDT")
+FOCUS_PAIRS = ("BTCUSDT", "PAXGUSDT")
+CORE_FOCUS = frozenset({"BTCUSDT", "PAXGUSDT"})
 
 
 def get_meme_coins() -> list[WatchlistSymbol]:
@@ -216,13 +217,22 @@ def get_top_trending_memes(limit: int | None = None) -> list[WatchlistSymbol]:
 
 
 def get_scan_symbol_order() -> list[WatchlistSymbol]:
-    """BTC + ETH + Gold always, then top movers."""
+    """BTC + Gold always first, then max 2 meme movers."""
     settings = get_settings()
     core = _core_symbols()
-    core_pairs = {s.pair for s in core}
+    # BTC first, then Gold
+    order_map = {s.pair: s for s in core}
+    ordered_core: list[WatchlistSymbol] = []
+    for pair in ("BTCUSDT", "PAXGUSDT"):
+        if pair in order_map:
+            ordered_core.append(order_map[pair])
+    for s in core:
+        if s.pair not in {x.pair for x in ordered_core}:
+            ordered_core.append(s)
+    core_pairs = {s.pair for s in ordered_core}
     movers = [m for m in get_top_24h_movers() if m.pair not in core_pairs]
     cap = max(0, settings.top_mover_scan_count)
-    combined = list(core) + movers[:cap]
+    combined = list(ordered_core) + movers[:cap]
     if combined:
         return combined
 

@@ -50,7 +50,8 @@ HTF_TF = "1h"
 LOOKBACK = 120
 
 _CATEGORY_ORDER = {"mover": 0, "meme": 0, "major": 1, "alt": 2}
-FOCUS_PAIRS = frozenset({"BTCUSDT", "ETHUSDT", "PAXGUSDT"})
+FOCUS_PAIRS = frozenset({"BTCUSDT", "PAXGUSDT"})
+CORE_FOCUS = frozenset({"BTCUSDT", "PAXGUSDT"})
 SCALP_SETUPS = frozenset({DIP_TOP_SETUP, "momentum_scalp", "dip_top_scalp"})
 
 
@@ -417,7 +418,13 @@ class CryptoScanner:
         return (c < o and close_pos <= 0.65) or upper_wick >= 0.25
 
     def _setups_for_symbol(self, sym: WatchlistSymbol, disabled_setups: set[str]):
-        """Fast movers: 1m buy-dip / sell-top only."""
+        """BTC/Gold: structure setups. Meme movers: 1m dip/top only."""
+        if sym.pair in CORE_FOCUS:
+            priority = ("structure_fib_sweep", "amd_model", "order_flow", "ifvg_reversal", "supply_demand")
+            for name in priority:
+                if name in SETUP_FUNCTIONS and name not in disabled_setups and name not in PERMANENTLY_DISABLED_SETUPS:
+                    yield name, SETUP_FUNCTIONS[name]
+            return
         if sym.category in ("meme", "mover"):
             if DIP_TOP_SETUP not in disabled_setups:
                 yield DIP_TOP_SETUP, None
@@ -527,6 +534,7 @@ class CryptoScanner:
                     funding_signed_pct=funding_signed,
                     open_positions=open_positions,
                     symbol_has_open=symbol_open,
+                    symbol=sym.pair,
                     settings=settings,
                 )
                 if alpha_reason:
@@ -571,8 +579,10 @@ class CryptoScanner:
                 if not validate_scalp_levels(entry, stop, t1, direction):
                     continue
                 bt_ok, bt_meta = passes_backtest_gate(entry_df, direction, entry, stop, t1, settings)
-                if not bt_ok:
+                if not bt_ok and sym.pair not in CORE_FOCUS:
                     continue
+                if not bt_ok:
+                    bt_meta = {"win_rate": 0, "samples": 0}
                 if not passes_fee_gate(tp_net, plan.notional_usdt, settings):
                     continue
 
@@ -600,6 +610,9 @@ class CryptoScanner:
                 scalp_label = "Buy dip (LONG)" if scalp_type == "buy_dip" else "Sell top (SHORT)"
                 signal.update({
                     "setup": setup_name,
+                    "support_price": round(swing_low, 8),
+                    "resistance_price": round(swing_high, 8),
+                    "expected_move_pct": round(abs(t1 - entry) / entry * 100, 2) if entry > 0 else 0,
                     "confidence": confidence,
                     "notify": notify,
                     "rr_label": rr_label,
@@ -660,7 +673,7 @@ class CryptoScanner:
         if not results:
             return []
 
-        max_per_sym = 2 if sym.category in ("meme", "mover") else (3 if sym.pair in FOCUS_PAIRS else 2)
+        max_per_sym = 3 if sym.pair in CORE_FOCUS else (2 if sym.category in ("meme", "mover") else 2)
 
         def _top_setups(items: list[dict], limit: int) -> list[dict]:
             if not items:

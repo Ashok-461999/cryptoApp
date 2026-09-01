@@ -148,20 +148,6 @@ class _SignalsScreenState extends ConsumerState<SignalsScreen> {
               ),
             ),
           ),
-          if (live.recentClosed.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Recent Results', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
-                    const SizedBox(height: 8),
-                    ...live.recentClosed.take(3).map((t) => _ClosedTradeChip(trade: t)),
-                  ],
-                ),
-              ),
-            ),
           if (live.error != null)
             SliverToBoxAdapter(
               child: Padding(
@@ -394,12 +380,12 @@ class _DailyGoalBanner extends StatelessWidget {
           ],
           const SizedBox(height: 4),
           Text(
-            '100–150 scalps/day · 25 fast movers · scan every 1m · 1:1 R:R',
+            'BTC & Gold focus · max $takeCap signals/day · scan every 5 min',
             style: const TextStyle(fontSize: 12, color: AppColors.gold, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
-            'Signals today: $takeCount · cap: $takeCap · confidence > 48% shown',
+            'Signals today: $takeCount · Support/Resist on BTC & Gold tracker above',
             style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
           ),
           if (lastClosed != null) ...[

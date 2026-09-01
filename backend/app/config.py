@@ -39,10 +39,10 @@ class Settings(BaseSettings):
     leverage_hq_max: int = 20
     high_quality_min_confidence: int = 85
     elite_min_confidence: int = 90
-    backtest_min_win_rate: float = 55.0
-    backtest_min_samples: int = 4
+    backtest_min_win_rate: float = 50.0
+    backtest_min_samples: int = 3
     backtest_lookback_bars: int = 80
-    core_scan_pairs: str = "BTCUSDT,ETHUSDT,PAXGUSDT"
+    core_scan_pairs: str = "BTCUSDT,PAXGUSDT"
     client_data_secret: str = ""
 
     @property
@@ -84,24 +84,24 @@ class Settings(BaseSettings):
     database_url: str = ""
     sqlite_path: str = "./data/cryptoapp.db"
 
-    # Signal limits — Alpha Engine: quality over quantity (3–5/day)
-    max_take_signals_per_day: int = 5
-    max_high_priority_signals_per_day: int = 5
-    max_signals_per_scan: int = 1
+    # Signal limits — BTC/Gold focus, up to 10/day
+    max_take_signals_per_day: int = 10
+    max_high_priority_signals_per_day: int = 10
+    max_signals_per_scan: int = 3
     high_priority_min_confidence: int = 85
     high_priority_min_rr: float = 1.5
-    history_retention_days: int = 7
-    top_mover_scan_count: int = 7
+    history_retention_days: int = 1
+    top_mover_scan_count: int = 2
     top_mover_scan_min: int = 5
     mover_refresh_hours: int = 3
     mover_levels_refresh_minutes: int = 15
     top_meme_scan_count: int = 7
     scan_24h_movers_only: bool = False
     scalp_min_confidence: int = 78
-    live_min_confidence: int = 75
+    live_min_confidence: int = 72
     normal_min_confidence: int = 75
     notify_min_confidence: int = 82
-    signal_cooldown_minutes: int = 30
+    signal_cooldown_minutes: int = 15
     scalp_holding_minutes: int = 15
     prioritize_meme_coins: bool = False
     mover_min_confidence: int = 78
@@ -117,11 +117,11 @@ class Settings(BaseSettings):
     max_funding_rate_pct: float = 0.08
     max_funding_extreme_pct: float = 0.10
 
-    # Alpha Engine gates
-    alpha_min_confluence_score: int = 3
-    alpha_min_confluence_categories: int = 3
-    alpha_ranging_min_confluence: int = 4
-    alpha_max_correlated_positions: int = 3
+    # Alpha Engine gates (relaxed for BTC/Gold — still quality-focused)
+    alpha_min_confluence_score: int = 2
+    alpha_min_confluence_categories: int = 2
+    alpha_ranging_min_confluence: int = 3
+    alpha_max_correlated_positions: int = 5
     loss_cooldown_after_sl: int = 2
     loss_cooldown_risk_multiplier: float = 0.5
 
@@ -145,7 +145,7 @@ class Settings(BaseSettings):
     auto_execute_min_confidence: int = 85
     max_exchange_trades_per_day: int = 10
     max_exchange_open_positions: int = 1
-    trading_paused_default: bool = True
+    trading_paused_default: bool = False
 
     @property
     def core_pairs_list(self) -> list[str]:

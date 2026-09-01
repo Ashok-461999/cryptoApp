@@ -178,8 +178,9 @@ def _compute_levels(
     swing_high: float,
     atr_val: float,
     tier: str,
+    rr: float = 2.0,
 ) -> tuple[float, float, float]:
-    """Entry at current price, normalized SL, TP1 at 1:3 R:R."""
+    """Entry at current price, normalized SL, TP1 at 1:2 R:R."""
     entry = price
     sl = normalize_stop_loss(
         entry=entry,
@@ -197,7 +198,7 @@ def _compute_levels(
         risk = entry * 0.005
         sl = entry - risk if direction == "LONG" else entry + risk
     sign = 1 if direction == "LONG" else -1
-    t1 = entry + sign * risk * T1_R
+    t1 = entry + sign * risk * rr
     return entry, sl, t1
 
 
@@ -211,14 +212,19 @@ def analyze_focus_pair(symbol: str, base: str, icon: str, force: bool = False) -
     valid_until = now + timedelta(minutes=ttl)
 
     candles = futures_client.get_futures_candles(symbol, "5m", 120)
+    htf_candles = futures_client.get_futures_candles(symbol, "1h", 48)
     if len(candles) < 30:
         return _fallback(symbol, base, icon, "insufficient data", now, valid_until, ttl)
 
     df = futures_client.candles_to_df(candles)
+    htf_df = futures_client.candles_to_df(htf_candles)
     bar = df.iloc[-1]
     price = float(bar["close"])
     regime = detect_regime(df)
-    swing_high, swing_low = swing_high_low(df)
+    if len(htf_df) >= 20:
+        swing_high, swing_low = swing_high_low(htf_df, lookback=20)
+    else:
+        swing_high, swing_low = swing_high_low(df)
     atr_p = atr_pct(df)
     atr_val = price * atr_p / 100.0 if atr_p > 0 else price * 0.008
     mid = (swing_high + swing_low) / 2

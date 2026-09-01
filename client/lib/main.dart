@@ -13,10 +13,11 @@ import '../services/notification_service.dart';
 import '../services/server_config.dart';
 import '../theme/app_theme.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService().init();
   runApp(const ProviderScope(child: CryptoSignalApp()));
+  // Defer notifications so first frame paints faster
+  Future.microtask(() => NotificationService().init());
 }
 
 class CryptoSignalApp extends ConsumerWidget {
@@ -62,17 +63,7 @@ class _HomeShellState extends ConsumerState<_HomeShell> {
     return Scaffold(
       body: SafeArea(
         bottom: false,
-        child: IndexedStack(
-          index: _index,
-          children: const [
-            SignalsScreen(),
-            HistoryScreen(),
-            AccountScreen(),
-            WatchlistScreen(),
-            NewsScreen(),
-            SettingsScreen(),
-          ],
-        ),
+        child: _buildTab(_index),
       ),
       bottomNavigationBar: NavigationBar(
         backgroundColor: AppColors.card,
@@ -89,5 +80,17 @@ class _HomeShellState extends ConsumerState<_HomeShell> {
         ],
       ),
     );
+  }
+
+  Widget _buildTab(int index) {
+    return switch (index) {
+      0 => const SignalsScreen(),
+      1 => const HistoryScreen(),
+      2 => const AccountScreen(),
+      3 => const WatchlistScreen(),
+      4 => const NewsScreen(),
+      5 => const SettingsScreen(),
+      _ => const SignalsScreen(),
+    };
   }
 }

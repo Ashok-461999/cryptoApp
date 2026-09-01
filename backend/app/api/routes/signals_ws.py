@@ -101,10 +101,7 @@ broadcaster = SignalBroadcaster()
 
 
 def _recent_closed_trades(limit: int = 10) -> list[dict]:
-    from app.services.signal_tracker import get_trade_history
-
-    closed = [t for t in get_trade_history(limit=limit) if t.get("status") in ("WIN", "LOSS", "EXPIRED")]
-    return closed[:limit]
+    return []
 
 
 @router.websocket("/ws/signals")

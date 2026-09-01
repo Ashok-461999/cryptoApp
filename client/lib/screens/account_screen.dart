@@ -80,7 +80,7 @@ class AccountScreen extends ConsumerWidget {
               ...s.setupPerformance.map((p) => _SetupPerfTile(row: p)),
             ],
             const SizedBox(height: 20),
-            const Text('Recent trades (7 days)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
+            const Text('Today\'s trades only', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.text)),
             const SizedBox(height: 8),
             _RecentTradesList(),
           ],
@@ -219,7 +219,10 @@ class _RecentTradesList extends ConsumerWidget {
     final history = ref.watch(tradeHistoryProvider);
     return history.when(
       data: (data) {
-        final items = (data['items'] as List? ?? []).take(10).map((e) => TradeRecord.fromJson(e as Map<String, dynamic>)).toList();
+        final items = (data['today_trades'] as List? ?? data['items'] as List? ?? [])
+            .take(10)
+            .map((e) => TradeRecord.fromJson(e as Map<String, dynamic>))
+            .toList();
         if (items.isEmpty) {
           return const Text('No trades yet', style: TextStyle(color: AppColors.textMuted));
         }

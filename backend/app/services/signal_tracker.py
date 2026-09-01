@@ -649,14 +649,52 @@ def get_today_trades(limit: int = 40) -> list[dict]:
     return [enrich_trade(t, fetch_missing_price=False) for t in rows]
 
 
-def get_trade_history(limit: int = 100) -> list[dict]:
+def purge_stale_data() -> dict:
+    """Clear old trades and expire stuck OPEN positions — keeps app/history fresh."""
+    settings = get_settings()
+    session = get_session()
+    deleted = 0
+    expired = 0
+    try:
+        from app.services.trade_analytics import purge_old_trades
+
+        deleted = purge_old_trades()
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=settings.scalp_holding_minutes + 5)
+        stale = session.scalars(
+            select(SignalTrade).where(
+                SignalTrade.status == "OPEN",
+                SignalTrade.created_at <= cutoff,
+            )
+        ).all()
+        for t in stale:
+            t.status = "EXPIRED"
+            t.close_reason = "EXPIRED"
+            t.exit_price = t.entry_price
+            t.pnl_usdt = 0
+            t.pnl_inr = 0
+            t.closed_at = datetime.now(timezone.utc)
+            expired += 1
+        if expired:
+            session.commit()
+        return {"purged_trades": deleted, "expired_open": expired}
+    except Exception:
+        session.rollback()
+        logger.exception("purge_stale_data failed")
+        return {"purged_trades": deleted, "expired_open": expired}
+    finally:
+        session.close()
+
+
+def get_trade_history(limit: int = 50, today_only: bool = True) -> list[dict]:
     from app.services.binance_stream import price_stream
 
+    start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     session = get_session()
     try:
-        trades = session.scalars(
-            select(SignalTrade).order_by(SignalTrade.created_at.desc()).limit(limit)
-        ).all()
+        q = select(SignalTrade).order_by(SignalTrade.created_at.desc()).limit(limit)
+        if today_only:
+            q = q.where(SignalTrade.created_at >= start)
+        trades = session.scalars(q).all()
         rows = list(trades)
     finally:
         session.close()

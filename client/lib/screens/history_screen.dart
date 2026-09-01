@@ -23,7 +23,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) {
       ref.invalidate(tradeHistoryProvider);
     });
   }
@@ -47,9 +47,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           final summary = data['summary'] as Map<String, dynamic>? ?? {};
           final tracking = data['tracking'] as Map<String, dynamic>? ?? {};
           final todayTrades = (data['today_trades'] as List? ?? []).map((e) => TradeRecord.fromJson(e as Map<String, dynamic>)).toList();
-          final items = todayTrades.isNotEmpty
-              ? todayTrades
-              : (data['items'] as List? ?? []).map((e) => TradeRecord.fromJson(e as Map<String, dynamic>)).toList();
+          final items = todayTrades;
           final todayTotal = tracking['today_total'] ?? items.length;
           final cap = tracking['cap'] ?? 40;
           final todayWins = tracking['wins'] ?? 0;

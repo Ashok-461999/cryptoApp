@@ -65,7 +65,7 @@ def get_signal_history(limit: int = 100):
     from app.services.signal_tracker import reconcile_open_trades
 
     reconcile_open_trades()
-    trades = get_trade_history(limit)
+    trades = get_trade_history(limit=50, today_only=True)
     today_trades = get_today_trades(40)
     settings = get_settings()
     from app.services.binance_account import fetch_binance_ui
@@ -92,8 +92,8 @@ def get_signal_history(limit: int = 100):
 
     return {
         "count": len(trades),
-        "items": trades,
-        "by_date": daily,
+        "items": today_trades if today_trades else trades,
+        "by_date": daily[:1],
         "today_trades": today_trades,
         "tracking": {
             "today_total": len(today_trades),

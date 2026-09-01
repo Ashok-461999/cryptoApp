@@ -19,8 +19,10 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.info("Starting CryptoSignalApp (%s)", settings.app_env)
     init_db()
+    from app.services.signal_tracker import purge_stale_data
     from app.services.trade_analytics import purge_old_trades
     purge_old_trades()
+    purge_stale_data()
     loop = asyncio.get_running_loop()
     signals_ws.broadcaster.start(loop)
     price_stream.start(loop)

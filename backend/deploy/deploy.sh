@@ -16,7 +16,8 @@ source .venv/bin/activate
 pip install -r requirements.txt -q
 
 sudo systemctl restart scalptrack
-sleep 2
+sleep 3
+curl -sf -X POST http://127.0.0.1:8000/settings/trading/start || true
 curl -sf http://127.0.0.1:8000/health | head -c 200
 echo ""
 echo "Deploy OK — $(date -u +%Y-%m-%dT%H:%M:%SZ)"

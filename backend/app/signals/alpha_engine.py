@@ -22,6 +22,7 @@ STRUCTURE_SETUPS = frozenset({
     "structure_fib_sweep", "amd_model", "structure_reversal", "fibonacci_retrace",
 })
 ORDER_FLOW_SETUPS = frozenset({"order_flow", "volume_profile", "anchored_vwap"})
+CORE_FOCUS_PAIRS = frozenset({"BTCUSDT", "PAXGUSDT"})
 
 
 @dataclass
@@ -183,28 +184,35 @@ def alpha_no_trade_reason(
     funding_signed_pct: float,
     open_positions: int,
     symbol_has_open: bool,
+    symbol: str = "",
     settings: Settings | None = None,
 ) -> str | None:
     """Return reason string if Alpha Engine rejects the setup."""
     s = settings or get_settings()
+    sym = symbol.upper()
+    is_core = sym in CORE_FOCUS_PAIRS
     conf = compute_confluence(setup_name, result, regime, htf, direction, rr, s)
 
     if spread_pct > s.max_spread_pct:
         return f"Spread {spread_pct:.2f}% > {s.max_spread_pct}% — poor execution"
-    if htf.in_range_mid:
+    if htf.in_range_mid and not is_core:
         return "HTF mid-range (40–60%) — no edge"
-    if conf.score < s.alpha_min_confluence_score:
-        return f"Confluence {conf.label} — need {s.alpha_min_confluence_score}+ factors"
-    if len(conf.categories) < s.alpha_min_confluence_categories:
-        return f"Only {len(conf.categories)} confluence categories — need {s.alpha_min_confluence_categories}+"
-    if rr < max(s.normal_min_rr, 2.0):
-        return f"R:R {rr:.2f} below minimum 1:2"
+    min_conf = 2 if is_core else s.alpha_min_confluence_score
+    min_cats = 2 if is_core else s.alpha_min_confluence_categories
+    if conf.score < min_conf:
+        return f"Confluence {conf.label} — need {min_conf}+ factors"
+    if len(conf.categories) < min_cats:
+        return f"Only {len(conf.categories)} confluence categories — need {min_cats}+"
+    min_rr = 1.5 if is_core else max(s.normal_min_rr, 2.0)
+    if rr < min_rr:
+        return f"R:R {rr:.2f} below minimum 1:{min_rr:.0f}"
     if open_positions >= s.alpha_max_correlated_positions:
         return f"Max {s.alpha_max_correlated_positions} correlated positions open"
-    if symbol_has_open:
+    if symbol_has_open and not is_core:
         return "Active signal still open on this pair"
-    if regime.regime == Regime.RANGING and conf.score < s.alpha_ranging_min_confluence:
-        return f"Ranging market — confluence {conf.label} below {s.alpha_ranging_min_confluence}"
+    ranging_min = 2 if is_core else s.alpha_ranging_min_confluence
+    if regime.regime == Regime.RANGING and conf.score < ranging_min:
+        return f"Ranging market — confluence {conf.label} below {ranging_min}"
     fund_reason = funding_blocks_trade(direction, funding_signed_pct, s)
     if fund_reason:
         return fund_reason
@@ -277,8 +285,8 @@ def enrich_alpha_payload(
     signal["validity_points"] = [
         f"🎯 {direction} — {signal.get('setup', '')} · Confluence {confluence.label}",
         f"📈 HTF: {htf.summary}",
-        f"🧹 Setup: {signal.get('decision_reason', '')}",
-        f"📍 Entry {entry:.6g} · SL {stop:.6g} · R:R 1:{rr}",
+        f"📍 Support {signal.get('support_price', 0)} · Resist {signal.get('resistance_price', 0)}",
+        f"📍 Entry {entry:.6g} · SL {stop:.6g} · Expected move {signal.get('expected_move_pct', 0)}%",
         f"✅ TP1 (50%): {t1:.6g} · TP2 (30%): {t2:.6g} · TP3 (20%): {t3:.6g}",
         f"📏 Risk {signal.get('risk_percent', 1)}% · Funding {funding_signed_pct:+.4f}%",
         f"⚠️ {signal.get('invalidation', '')}",
