@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/crypto_signal.dart';
-import '../providers/live_signals_provider.dart';
 import '../providers/providers.dart';
 import '../screens/signal_chart_screen.dart';
 import '../theme/app_theme.dart';
@@ -27,7 +26,6 @@ class DeltaSignalCard extends ConsumerStatefulWidget {
 
 class _DeltaSignalCardState extends ConsumerState<DeltaSignalCard> {
   bool _expanded = false;
-  bool _acting = false;
   List<Map<String, dynamic>>? _candles;
   bool _loadingChart = false;
 
@@ -40,30 +38,6 @@ class _DeltaSignalCardState extends ConsumerState<DeltaSignalCard> {
       if (mounted) setState(() => _candles = c);
     } catch (_) {}
     if (mounted) setState(() => _loadingChart = false);
-  }
-
-  Future<void> _onTake() async {
-    if (_acting || widget.signal.isTaken) return;
-    setState(() => _acting = true);
-    final ok = await ref.read(liveSignalsProvider.notifier).takeSignal(widget.signal);
-    if (mounted) {
-      setState(() => _acting = false);
-      if (ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.signal.executedOnExchange ? 'Order placed on Binance' : 'Tracking ${widget.signal.symbol}'),
-            backgroundColor: AppColors.profit,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _onSkip() async {
-    if (_acting || widget.signal.isTaken) return;
-    setState(() => _acting = true);
-    await ref.read(liveSignalsProvider.notifier).skipSignal(widget.signal);
-    if (mounted) setState(() => _acting = false);
   }
 
   Color _gradeColor(String g) {
@@ -235,32 +209,6 @@ class _DeltaSignalCardState extends ConsumerState<DeltaSignalCard> {
               ],
             ),
           ),
-          if (!signal.isTaken)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _acting ? null : _onSkip,
-                      style: OutlinedButton.styleFrom(foregroundColor: AppColors.textMuted, side: const BorderSide(color: AppColors.border)),
-                      child: const Text('SKIP', style: TextStyle(fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed: _acting ? null : _onTake,
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.profit, foregroundColor: AppColors.bg),
-                      child: _acting
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.bg))
-                          : const Text('TAKE', style: TextStyle(fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
         ],
       ),
     );

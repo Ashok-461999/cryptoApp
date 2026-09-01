@@ -223,7 +223,6 @@ class _StatusBar extends StatelessWidget {
     final cfg = tradingConfig;
     final paused = cfg?['trading_paused'] == true;
     final status = cfg?['status_label'] ?? (paused ? 'PAUSED' : (cfg != null ? 'RUNNING' : '—'));
-    final todayPnl = (cfg?['binance_today_pnl_inr'] as num?)?.toDouble();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -241,8 +240,6 @@ class _StatusBar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Engine $status · ${live.totalScanned} scanned', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.text)),
-                if (todayPnl != null)
-                  Text('Today PnL ${todayPnl >= 0 ? '+' : ''}₹${todayPnl.toStringAsFixed(0)}', style: TextStyle(fontSize: 10, color: todayPnl >= 0 ? AppColors.profit : AppColors.loss)),
                 if (live.lastClosedMessage != null)
                   Text(live.lastClosedMessage!, style: const TextStyle(fontSize: 10, color: AppColors.textMuted), maxLines: 1, overflow: TextOverflow.ellipsis),
               ],

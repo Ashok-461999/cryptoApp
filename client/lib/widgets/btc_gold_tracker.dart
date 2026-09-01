@@ -163,18 +163,18 @@ class _FocusTrackerCard extends StatelessWidget {
               Row(
                 children: isStraddle
                     ? [
-                        Expanded(child: _MiniLevel('Entry', formatPrice(entry), AppColors.accent)),
+                        Expanded(child: _MiniLevel('Entry', formatPrice(entry!), AppColors.accent)),
                         const SizedBox(width: 6),
-                        Expanded(child: _MiniLevel('TP ↑ WIN', formatPrice(target), AppColors.gold)),
+                        Expanded(child: _MiniLevel('TP ↑ WIN', formatPrice(target!), AppColors.gold)),
                         const SizedBox(width: 6),
-                        Expanded(child: _MiniLevel('TP ↓ WIN', formatPrice(target2), AppColors.gold)),
+                        Expanded(child: _MiniLevel('TP ↓ WIN', formatPrice(target2!), AppColors.gold)),
                       ]
                     : [
-                        Expanded(child: _MiniLevel('Entry', formatPrice(entry), AppColors.accent)),
+                        Expanded(child: _MiniLevel('Entry', formatPrice(entry!), AppColors.accent)),
                         const SizedBox(width: 6),
-                        Expanded(child: _MiniLevel('SL', formatPrice(sl), AppColors.loss)),
+                        Expanded(child: _MiniLevel('SL', formatPrice(sl!), AppColors.loss)),
                         const SizedBox(width: 6),
-                        Expanded(child: _MiniLevel('TP1', formatPrice(target), AppColors.profit)),
+                        Expanded(child: _MiniLevel('TP1', formatPrice(target!), AppColors.profit)),
                       ],
               ),
             ],
