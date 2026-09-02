@@ -135,7 +135,7 @@ class Settings(BaseSettings):
 
     # Target move — straddle wins on ±move (BTC default $1000)
     alpha_target_move_usdt: float = 1000.0
-    options_prefer_straddle: bool = True
+    options_prefer_straddle: bool = False
 
     # Delta Exchange India — options/GEX (public + optional API key for fills)
     delta_exchange_base_url: str = "https://api.india.delta.exchange"

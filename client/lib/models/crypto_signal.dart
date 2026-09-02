@@ -291,6 +291,11 @@ class CryptoSignal {
 
   bool get isStraddle => direction == 'STRADDLE';
 
+  bool get isDirectionalSignal =>
+      !isStraddle &&
+      (direction == 'LONG' || direction == 'SHORT') &&
+      !instrumentType.toLowerCase().contains('options');
+
   bool get isDeltaEngine => engine == 'delta_binance_alpha' || confluenceScore > 0;
 
   bool get isHighConfluence => confluenceScore >= 75;

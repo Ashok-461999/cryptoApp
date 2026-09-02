@@ -50,9 +50,8 @@ class _DeltaSignalCardState extends ConsumerState<DeltaSignalCard> {
   Widget build(BuildContext context) {
     final signal = widget.signal;
     final formatPrice = widget.formatPrice;
-    final isStraddle = signal.direction == 'STRADDLE';
-    final isLong = !isStraddle && signal.direction == 'LONG';
-    final dirColor = isStraddle ? AppColors.gold : (isLong ? AppColors.profit : AppColors.loss);
+    final isLong = signal.direction == 'LONG';
+    final dirColor = isLong ? AppColors.profit : AppColors.accentBlue;
     final price = widget.livePrice ?? signal.entryPrice;
     final score = signal.confluenceScore > 0 ? signal.confluenceScore : signal.confidence;
     final grade = signal.displayGrade;
@@ -60,11 +59,10 @@ class _DeltaSignalCardState extends ConsumerState<DeltaSignalCard> {
     final funding = (deriv['funding_pct_8h'] as num?)?.toDouble() ?? 0;
     final ls = (deriv['long_short_ratio'] as num?)?.toDouble() ?? 1;
     final isHigh = signal.isHighConfluence || signal.isHighPriority;
-    final pnlPct = isStraddle
-        ? ((price - signal.entryPrice).abs() / signal.entryPrice * 100)
-        : (isLong
-            ? ((price - signal.entryPrice) / signal.entryPrice * 100)
-            : ((signal.entryPrice - price) / signal.entryPrice * 100));
+    final tp = signal.target1Price;
+    final toTpPct = tp > 0 && signal.entryPrice > 0
+        ? ((isLong ? (tp - price) : (price - tp)).abs() / signal.entryPrice * 100)
+        : 0.0;
 
     Widget card = Container(
       decoration: BoxDecoration(
@@ -90,9 +88,7 @@ class _DeltaSignalCardState extends ConsumerState<DeltaSignalCard> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        isStraddle
-                            ? 'STRADDLE ${signal.symbol.replaceAll('USDT', '')}'
-                            : '${signal.direction} ${signal.symbol.replaceAll('USDT', '')}',
+                        '${signal.direction} ${signal.symbol.replaceAll('USDT', '')}',
                         style: TextStyle(fontWeight: FontWeight.w800, color: dirColor, fontSize: 15),
                       ),
                     ),
@@ -100,10 +96,11 @@ class _DeltaSignalCardState extends ConsumerState<DeltaSignalCard> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(formatPrice(price), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.text)),
-                        Text(
-                          '${pnlPct >= 0 ? '+' : ''}${pnlPct.toStringAsFixed(2)}%',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: pnlPct >= 0 ? AppColors.profit : AppColors.loss),
-                        ),
+                        if (tp > 0)
+                          Text(
+                            '${toTpPct.toStringAsFixed(2)}% to TP',
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent),
+                          ),
                       ],
                     ),
                   ],
@@ -118,15 +115,6 @@ class _DeltaSignalCardState extends ConsumerState<DeltaSignalCard> {
                     _Chip(signal.setupLabel, AppColors.textMuted),
                   ],
                 ),
-                if (signal.isStraddle && signal.straddleSetup.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    signal.straddleSetup['instruction']?.toString() ?? 'BUY 1× Call + BUY 1× Put on Delta',
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.gold, height: 1.35),
-                    maxLines: _expanded ? null : 2,
-                    overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                  ),
-                ],
                 if (signal.prediction.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
@@ -147,21 +135,13 @@ class _DeltaSignalCardState extends ConsumerState<DeltaSignalCard> {
                     color: AppColors.bgElevated,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: isStraddle
-                      ? Row(
-                          children: [
-                            Expanded(child: _TradeLevel('Entry', formatPrice(signal.entryPrice), AppColors.accent)),
-                            Expanded(child: _TradeLevel('TP ↑ WIN', formatPrice(signal.target1Price), AppColors.gold)),
-                            Expanded(child: _TradeLevel('TP ↓ WIN', formatPrice(signal.target2Price), AppColors.gold)),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            Expanded(child: _TradeLevel('Entry', formatPrice(signal.entryPrice), AppColors.text)),
-                            Expanded(child: _TradeLevel('SL', formatPrice(signal.stopLossPrice), AppColors.loss)),
-                            Expanded(child: _TradeLevel('TP1', formatPrice(signal.target1Price), AppColors.profit)),
-                          ],
-                        ),
+                  child: Row(
+                    children: [
+                      Expanded(child: _TradeLevel('Entry', formatPrice(signal.entryPrice), AppColors.accent)),
+                      Expanded(child: _TradeLevel('TP1', formatPrice(signal.target1Price), AppColors.profit)),
+                      Expanded(child: _TradeLevel('R:R', '${signal.riskReward.toStringAsFixed(1)}:1', AppColors.gold)),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(

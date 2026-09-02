@@ -126,11 +126,11 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('🔴 Bearish ${bearPct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.loss)),
+                              Text('Bearish ${bearPct.toStringAsFixed(0)}%', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accentBlue)),
                               const SizedBox(height: 4),
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(4),
-                                child: LinearProgressIndicator(value: bearPct / 100, minHeight: 8, backgroundColor: AppColors.border, color: AppColors.loss),
+                                child: LinearProgressIndicator(value: bearPct / 100, minHeight: 8, backgroundColor: AppColors.border, color: AppColors.accentBlue),
                               ),
                             ],
                           ),
@@ -139,7 +139,7 @@ class _WatchlistScreenState extends ConsumerState<WatchlistScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Today ${tracking['today_total'] ?? 0}/${tracking['cap'] ?? 150} · Win ${tracking['wins'] ?? 0} · Loss ${tracking['losses'] ?? 0}',
+                      'Today ${tracking['today_total'] ?? 0}/${tracking['cap'] ?? 150} signals',
                       style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
                     ),
                   ],
@@ -350,15 +350,14 @@ class _FocusChartCardState extends ConsumerState<_FocusChartCard> {
                 children: [
                   _LevelChip('Entry', widget.formatPrice(entry ?? 0), AppColors.accent),
                   const SizedBox(width: 6),
-                  _LevelChip('SL', widget.formatPrice(sl ?? 0), AppColors.loss),
+                  _LevelChip('TP1', widget.formatPrice(target ?? 0), AppColors.profit),
                   const SizedBox(width: 6),
-                  _LevelChip('T1', widget.formatPrice(target ?? 0), AppColors.profit),
+                  _LevelChip('Conf', '${sig['confidence'] ?? 0}%', AppColors.gold),
                 ],
               ),
               const SizedBox(height: 6),
               Text(
-                '${direction ?? ''} · ${sig['setup'] ?? ''} · ${sig['confidence'] ?? 0}%'
-                '${refPnl != null ? ' · Ref ${refPnl >= 0 ? '+' : ''}₹${refPnl.abs().toStringAsFixed(0)}' : ''}',
+                '${direction ?? ''} · ${sig['setup'] ?? ''}',
                 style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
               ),
             ] else

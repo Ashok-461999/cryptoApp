@@ -168,6 +168,7 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
   void _applySnapshot(Map<String, dynamic> data) {
     final list = (data['signals'] as List? ?? [])
         .map((e) => CryptoSignal.fromJson(e as Map<String, dynamic>))
+        .where((s) => s.isDirectionalSignal && (s.confluenceScore >= 70 || s.confidence >= 78))
         .toList();
     final pricesRaw = data['prices'] as Map<String, dynamic>? ?? {};
     final prices = pricesRaw.map((k, v) => MapEntry(k, (v as num).toDouble()));
@@ -179,9 +180,7 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
       final isBest = sig.isHighPriority ||
           sig.notify ||
           sig.signalGrade == 'A+' ||
-          sig.confluenceScore >= 70 ||
-          sig.direction == 'STRADDLE' ||
-          sig.instrumentType.toLowerCase().contains('options');
+          sig.confluenceScore >= 75;
       if (!isBest) continue;
       final key = '${sig.symbol}:${sig.setup}:${sig.tradeId ?? sig.timestamp}';
       if (_notifiedKeys.contains(key)) continue;
@@ -205,6 +204,7 @@ class LiveSignalsNotifier extends StateNotifier<LiveSignalsState> {
     final marketPrep = prepRaw != null ? MarketPrep.fromJson(prepRaw) : state.marketPrep;
     final focusRaw = (data['focus_tracker'] as List? ?? state.focusTracker)
         .map((e) => Map<String, dynamic>.from(e as Map))
+        .where((e) => e['action'] != 'STRADDLE')
         .toList();
 
     state = state.copyWith(

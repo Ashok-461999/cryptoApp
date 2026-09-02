@@ -207,12 +207,14 @@ class CryptoScanner:
                     sym = futures[fut]
                     logger.exception("Scan failed for %s", sym.pair)
 
-        try:
-            candidates.extend(scan_delta_options_signals(settings))
-        except Exception:
-            logger.exception("Delta options scan failed")
+        if settings.options_prefer_straddle:
+            try:
+                candidates.extend(scan_delta_options_signals(settings))
+            except Exception:
+                logger.exception("Delta options scan failed")
 
         candidates.sort(key=self._sort_key)
+        candidates = [c for c in candidates if (c.get("direction") or "").upper() != "STRADDLE"]
         quality = [
             c for c in candidates
             if c.get("confidence", 0) > settings.live_min_confidence

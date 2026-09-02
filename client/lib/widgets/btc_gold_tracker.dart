@@ -38,9 +38,9 @@ class _FocusTrackerCard extends StatelessWidget {
 
   const _FocusTrackerCard({required this.item, this.onTap});
 
-  Color _predColor(String p) => p == 'bullish' ? AppColors.profit : (p == 'bearish' ? AppColors.loss : (p == 'volatile' ? AppColors.gold : AppColors.textMuted));
+  Color _predColor(String p) => p == 'bullish' ? AppColors.profit : (p == 'bearish' ? AppColors.accentBlue : AppColors.textMuted);
 
-  String _predLabel(String p) => p == 'bullish' ? 'BULLISH' : (p == 'bearish' ? 'BEARISH' : (p == 'volatile' ? 'STRADDLE' : 'NEUTRAL'));
+  String _predLabel(String p) => p == 'bullish' ? 'BULLISH' : (p == 'bearish' ? 'BEARISH' : 'NEUTRAL');
 
   String _fmtTime(String? iso) {
     if (iso == null || iso.isEmpty) return '—';
@@ -90,12 +90,7 @@ class _FocusTrackerCard extends StatelessWidget {
     final entry = _d(item['entry_price']) ?? _d(levels['entry']);
     final sl = _d(item['stop_loss_price']) ?? _d(levels['stop_loss']);
     final target = _d(item['target_1_price']) ?? _d(levels['target']);
-    final target2 = _d(item['target_2_price']) ?? _d(levels['target_2']);
-    final moveUsdt = _d(item['target_move_usdt']) ?? _d(levels['target_move_usdt']);
-    final isStraddle = action == 'STRADDLE';
-    final hasTrade = isStraddle
-        ? (entry != null && entry > 0 && target != null && target > 0 && target2 != null && target2 > 0)
-        : (action != 'WAIT' && entry != null && entry > 0 && sl != null && sl > 0 && target != null && target > 0);
+    final hasTrade = action != 'WAIT' && entry != null && entry > 0 && target != null && target > 0;
     final expired = _isExpired(item['valid_until']?.toString());
     final hasLive = item['has_live_signal'] == true;
     final deriv = item['derivatives'] as Map<String, dynamic>?;
@@ -144,7 +139,7 @@ class _FocusTrackerCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.border),
                   ),
-                  child: Text(action, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: action == 'STRADDLE' ? AppColors.gold : (action == 'BUY' ? AppColors.profit : (action == 'SELL' ? AppColors.loss : AppColors.textMuted)))),
+                  child: Text(action, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: action == 'BUY' ? AppColors.profit : (action == 'SELL' ? AppColors.accentBlue : AppColors.textMuted))),
                 ),
               ],
             ),
@@ -155,45 +150,29 @@ class _FocusTrackerCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 _MiniLevel('Bull %', '${bullishPct.round()}%', color),
                 const SizedBox(width: 6),
-                _MiniLevel('Move', isStraddle && moveUsdt != null ? '±\$${moveUsdt.round()}' : (hasTrade ? '${expectedMove.toStringAsFixed(1)}%' : '—'), AppColors.gold),
+                _MiniLevel('Move', hasTrade ? '${expectedMove.toStringAsFixed(1)}%' : '—', AppColors.gold),
               ],
             ),
             if (hasTrade) ...[
               const SizedBox(height: 8),
               Row(
-                children: isStraddle
-                    ? [
-                        Expanded(child: _MiniLevel('Entry', formatPrice(entry!), AppColors.accent)),
-                        const SizedBox(width: 6),
-                        Expanded(child: _MiniLevel('TP ↑ WIN', formatPrice(target!), AppColors.gold)),
-                        const SizedBox(width: 6),
-                        Expanded(child: _MiniLevel('TP ↓ WIN', formatPrice(target2!), AppColors.gold)),
-                      ]
-                    : [
-                        Expanded(child: _MiniLevel('Entry', formatPrice(entry!), AppColors.accent)),
-                        const SizedBox(width: 6),
-                        Expanded(child: _MiniLevel('SL', formatPrice(sl!), AppColors.loss)),
-                        const SizedBox(width: 6),
-                        Expanded(child: _MiniLevel('TP1', formatPrice(target!), AppColors.profit)),
-                      ],
-              ),
-            ],
-            if (!isStraddle) ...[
-              const SizedBox(height: 8),
-              Row(
                 children: [
-                  Expanded(child: _MiniLevel('Support', formatPrice(support), AppColors.profit)),
+                  Expanded(child: _MiniLevel('Entry', formatPrice(entry!), AppColors.accent)),
                   const SizedBox(width: 6),
-                  Expanded(child: _MiniLevel('Resist', formatPrice(resistance), AppColors.loss)),
+                  Expanded(child: _MiniLevel('TP1', formatPrice(target!), AppColors.profit)),
+                  const SizedBox(width: 6),
+                  Expanded(child: _MiniLevel('Move', '${expectedMove.toStringAsFixed(1)}%', AppColors.gold)),
                 ],
               ),
-            ] else if (hasTrade) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Straddle — profit if price hits either TP ↑ or TP ↓ (not a directional long/short)',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.gold.withValues(alpha: 0.9), height: 1.3),
-              ),
             ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: _MiniLevel('Support', formatPrice(support), AppColors.profit)),
+                const SizedBox(width: 6),
+                Expanded(child: _MiniLevel('Resist', formatPrice(resistance), AppColors.accentBlue)),
+              ],
+            ),
             if (deriv != null && deriv.isNotEmpty) ...[
               const SizedBox(height: 8),
               Row(

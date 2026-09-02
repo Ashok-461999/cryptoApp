@@ -285,7 +285,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Text(
                 '• Delta × Binance Alpha: 70+ confluence · grade A+/A/B\n'
                 '• Derivatives: OI, funding, L/S, taker flow, liq map\n'
-                '• Delta options straddle with exact contracts when IV is cheap\n'
+                '• Binance USDT perp LONG/SHORT with 70+ confluence\n'
+                '• Derivatives: OI, funding, L/S, taker flow, liq map\n'
                 '• News sentiment + market profile on every signal\n'
                 '• Signals only — no auto-trade in this build\n'
                 '• NO TRADE is normal — quality over quantity',
